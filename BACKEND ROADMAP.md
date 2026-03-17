@@ -1,41 +1,4 @@
-# Shree_v2 Backend — Complete Project Roadmap
-
-## Answering Your Three Questions First
-
-### Does the current project flow enable the LLM to reason with context beyond just price predictions?
-
-Yes, and this is actually the strongest part of the design. The reason the architecture works well here is that the agent is not a dumb pipeline that fetches data and returns it. It is a reasoning agent that decides what information it needs, fetches it from multiple tools in sequence, and then synthesizes everything into one coherent reply.
-
-When a user asks "Should I invest in TCS right now?", the agent is free to call `tool_get_stock_info` for the current price and PE ratio, `tool_get_financials` for the income statement, `tool_get_analyst_data` for analyst targets, `tool_search_news` for the last 7 days of headlines, and `tool_predict_stock` for a short-term forecast — all within a single turn. The LLM then writes a response that brings all of that together in plain language.
-
-The key point is that the system prompt is what gives the agent its analytical character. You are not writing if-else logic to decide what to fetch. You are instructing the Gemini LLM to think like a financial analyst. The system prompt you write in `agent.py` should explicitly tell it: "When asked about a stock, consider its technical picture, its fundamental health, recent news, and analyst consensus together before forming a view."
-
-For showing details to the user, the design handles two output modes:
-
-The first mode is plain text. The agent writes a report with sections (using markdown headers like `## Fundamental Analysis` and `## Technical Picture`) that the frontend renders as formatted text in the chat bubble.
-
-The second mode is structured data. The agent embeds chart-ready JSON in a `data` block at the end of its response. The frontend extracts this separately and renders it as a candlestick chart, a bar chart for financial metrics, a forecast band chart, or whatever the data describes. You will add a `chart_type` field inside the data block so the frontend knows which visualization to render.
-
-So the answer is yes — the agent reasons holistically, the reports surface qualitative analysis, and the data block surfaces quantitative visualizations.
-
-### Is your Excel file of Indian Stock Market Listings useful right now?
-
-It is useful in a specific, bounded way. Right now, yfinance already knows about every major listed stock — you do not need a listings file to fetch data. Where your Excel file becomes genuinely useful is:
-
-For building a stock search or autocomplete feature in the frontend, so users can type a company name and get the NSE/BSE ticker symbol. This is a real UX problem because users think "HDFC Bank" not "HDFCBANK.NS".
-
-For adding a `tool_search_ticker` tool in `mcp_server.py` that the agent can call when a user mentions a company by name instead of ticker. The tool searches your Excel file and returns the correct symbol.
-
-For Phase 2 data engineering, where you need to build a training dataset across many stocks. Your listings file gives you the universe of symbols to loop over.
-
-The recommendation is to include it in the project as `data/indian_listings.xlsx` and write a `tools/ticker_lookup.py` that loads it into memory once at startup. Register it as `tool_search_ticker` in `mcp_server.py`. This is a one-day addition, well within the Phase 1 scope.
-
-### Day 1 is too light — what more can fit?
-
-You are right. Day 1 as originally described only touches config and schemas. The revised Day 1 below includes: the full folder skeleton, config and schemas, session store, formatters utility (which has no external dependencies and is pure Python), the ticker lookup tool from your Excel file, and the full `test_tools.py` scaffold. All of that has zero dependency on external APIs so it can be built and verified entirely offline. By end of Day 1 you should have a skeleton where every import resolves and the formatter and session store can be tested with no network.
-
----
-
+# Shree_v2 Backend — Complete Project 
 ## 1. Roadmap
 
 **Day 1: Skeleton, config, schemas, session store, formatters, ticker lookup, and test scaffold. Everything that requires zero API keys.**

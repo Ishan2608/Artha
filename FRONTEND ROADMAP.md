@@ -1,7 +1,5 @@
 # Shree Mobile – React Native Frontend Roadmap  
-(Simple chat interface + file upload + text context + basic chart visualization)
 
-Reference date: March 16, 2026  
 Target developer profile: beginner to intermediate developer working primarily with AI coding assistants
 
 ## Core Functional Objectives

@@ -1,98 +1,77 @@
 import torch
-import numpy as np
+from chronos import BaseChronosPipeline
 from tools.stock_data import get_stock_history
 
-
+# Global pipeline variable for lazy loading
 _pipeline = None
-
 
 def _get_pipeline():
     """
     Lazy-load the Amazon Chronos T5 Tiny forecasting pipeline.
-
-    Simple explanation:
-    Chronos is like a pre-trained analyst who has studied thousands of different
-    time series (sales data, weather data, energy prices, financial data). You show
-    it your stock's price history, and it draws on everything it learned to suggest
-    where prices might go. No training needed on your end — it already knows patterns.
-
-    Technical explanation:
-    Chronos is a zero-shot time series foundation model based on the T5 transformer
-    architecture. It was pre-trained on a large corpus of diverse real and synthetic
-    time series. It tokenizes continuous values into a discrete vocabulary, then uses
-    the T5 encoder-decoder to autoregressively sample from the predictive distribution.
-    "Zero-shot" means it generalizes to new series without fine-tuning.
-
-    The "tiny" variant (21M parameters) is CPU-feasible in ~2-5 seconds per prediction.
-
-    Returns:
-        A loaded ChronosPipeline ready for .predict() calls.
     """
-    # TODO: global _pipeline
-    # TODO: If _pipeline is None:
-    #         from chronos import ChronosPipeline
-    #         _pipeline = ChronosPipeline.from_pretrained(
-    #             "amazon/chronos-t5-tiny",
-    #             device_map="cpu",
-    #             torch_dtype=torch.float32,
-    #         )
-    # TODO: Return _pipeline
-    pass
-
+    global _pipeline
+    
+    if _pipeline is None:
+        print("  [Forecasting] Loading Chronos T5 Tiny model on CPU...")
+        
+        # We explicitly force "cpu" because AMD GPUs are not supported by PyTorch CUDA,
+        # and this ensures we stay well within the 3.42GB usable RAM limit.
+        _pipeline = BaseChronosPipeline.from_pretrained(
+            "amazon/chronos-t5-tiny",
+            device_map="cpu"
+        )
+        
+    return _pipeline
 
 def predict_stock_prices(symbol: str, exchange: str = "NSE", horizon_days: int = 10) -> dict:
     """
     Forecast the next N closing prices for a stock using Amazon Chronos.
-
-    This tool is for short-term probabilistic forecasting only. It works on
-    price patterns alone — it has no knowledge of news events, earnings releases,
-    or macro changes. The agent should always pair a forecast with context from
-    the news and analysis tools to give the user a complete picture.
-
-    How the output is structured for the frontend:
-    The returned dict is designed to plot a continuation chart:
-      - Historical dates + closes draw the historical line up to today.
-      - Forecast dates are projected forward from today.
-      - forecast_median is the center line of the forecast band.
-      - forecast_low / forecast_high form a shaded confidence band.
-
-    Args:
-        symbol: Ticker symbol. Example: "TCS"
-        exchange: "NSE" or "BSE"
-        horizon_days: Future trading days to forecast. Keep between 5 and 20.
-                      Beyond 20 days, Chronos tiny degrades significantly.
-
-    Returns:
-        {
-            "symbol": str,
-            "chart_type": "forecast",              <- frontend uses this to pick the right chart
-            "historical_dates": [str, ...],
-            "historical_closes": [float, ...],
-            "forecast_median": [float, ...],
-            "forecast_low": [float, ...],
-            "forecast_high": [float, ...],
-            "horizon_days": int,
-            "note": str                            <- always include disclaimer
-        }
-        On error, returns {"error": str, "symbol": symbol}.
     """
-    # TODO: Wrap everything in try/except. On exception return {"error": str(e), "symbol": symbol}.
-    # TODO: history = get_stock_history(symbol, exchange, period="3mo", interval="1d")
-    # TODO: If "error" in history: return history (propagate the error)
-    # TODO: closes = history["close"]
-    # TODO: historical_dates = history["dates"]
-    # TODO: context = torch.tensor(closes, dtype=torch.float32).unsqueeze(0)
-    #       Shape after unsqueeze: [1, T] — batch dimension required by Chronos
-    # TODO: pipeline = _get_pipeline()
-    # TODO: forecast = pipeline.predict(context=context, prediction_length=horizon_days, num_samples=20)
-    #       forecast shape: [1, num_samples, horizon_days]
-    # TODO: samples = forecast[0].numpy()  ← shape: [num_samples, horizon_days]
-    # TODO: Compute:
-    #         forecast_median = np.median(samples, axis=0).round(2).tolist()
-    #         forecast_low    = np.percentile(samples, 10, axis=0).round(2).tolist()
-    #         forecast_high   = np.percentile(samples, 90, axis=0).round(2).tolist()
-    # TODO: Return the assembled dict. Set chart_type = "forecast".
-    #       note = "This forecast is generated by a statistical model using price patterns only.
-    #               It does not account for news, earnings, or macro events.
-    #               This is for educational purposes and not financial advice."
-    pass
+    try:
+        # 1. Fetch 3 months of historical daily data
+        history = get_stock_history(symbol, exchange, period="3mo", interval="1d")
+        
+        if "error" in history:
+            return history
+            
+        closes = history["close"]
+        historical_dates = history["dates"]
+        
+        # 2. Prepare the data: The new API accepts a simple 1D tensor
+        context = torch.tensor(closes, dtype=torch.float32)
+        
+        # 3. Load the model
+        pipeline = _get_pipeline()
+        
+        # 4. Generate forecasts using the new predict_quantiles method
+        # NOTE: The parameter is 'inputs', not 'context' in the new API
+        quantiles, mean = pipeline.predict_quantiles(
+            inputs=context, 
+            prediction_length=horizon_days, 
+            quantile_levels=[0.1, 0.5, 0.9]
+        )
+        
+        # 5. Extract the predictions from the PyTorch tensor and round them
+        # quantiles shape is [batch_size, horizon, levels] -> [1, 10, 3]
+        forecast_low = [round(x, 2) for x in quantiles[0, :, 0].tolist()]
+        forecast_median = [round(x, 2) for x in quantiles[0, :, 1].tolist()]
+        forecast_high = [round(x, 2) for x in quantiles[0, :, 2].tolist()]
+        
+        return {
+            "symbol": symbol,
+            "chart_type": "forecast",
+            "historical_dates": historical_dates,
+            "historical_closes": closes,
+            "forecast_median": forecast_median,
+            "forecast_low": forecast_low,
+            "forecast_high": forecast_high,
+            "horizon_days": horizon_days,
+            "note": (
+                "This forecast is generated by a statistical model using price patterns only. "
+                "It does not account for news, earnings, or macro events. "
+                "This is for educational purposes and not financial advice."
+            )
+        }
+        
+    except Exception as e:
+        return {"error": str(e), "symbol": symbol}

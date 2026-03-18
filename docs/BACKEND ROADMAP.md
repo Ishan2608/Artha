@@ -64,24 +64,33 @@ shree_v2_backend/
 ├── data/
 │   └── indian_listings.xlsx     # Your Indian stock market listings file. Used by ticker_lookup.py.
 │
+├── docs/
+│   └── BACKEND ROADMAP.md
+│   └── FRONTEND ROADMAP.md
+│   └── JOUNRAL.md
+│
 ├── models/
 │   ├── __init__.py              # Empty. Makes models/ a Python package.
 │   └── schemas.py               # All Pydantic request/response models used by FastAPI routes.
 │
 ├── tools/
 │   ├── __init__.py              # Empty. Makes tools/ a Python package.
+│   ├── document_search.py       # Query user uploaded documents.
 │   ├── stock_data.py            # All yfinance logic: info, history, financials, actions, holders, ESG.
 │   ├── web_search.py            # Tavily web search wrapper. Returns clean list of result dicts.
 │   ├── news_search.py           # NewsAPI wrapper. Returns clean list of article dicts.
-│   ├── doc_parser.py            # PDF (PyPDF2) and XLSX (openpyxl) extraction into JSON-safe dicts.
 │   ├── ticker_lookup.py         # Loads indian_listings.xlsx. Provides company-name to ticker search.
 │   └── ts_model.py              # Amazon Chronos HuggingFace wrapper. Zero-shot price forecasting.
 │
 ├── utils/
 │   ├── __init__.py              # Empty. Makes utils/ a Python package.
 │   ├── formatters.py            # Sanitize DataFrames: strip NaN, convert Timestamps, round floats.
-│   └── session_store.py         # In-memory session store keyed by session_id. History + files.
+│   ├── doc_parser.py            # PDF (PyPDF2) and XLSX (openpyxl) extraction into JSON-safe dicts.
+│   ├── session_store.py         # In-memory session store keyed by session_id. History + files.
+│   └── rag_engine.py            # Chunk and index parsed documents.
 │
+├── test_files/                  # Sample files to check RAG capabilities.
+│   
 ├── ml/                          # Phase 2 only. All custom model code lives here.
 │   ├── __init__.py
 │   ├── data_pipeline.py         # Fetch, normalize, sliding window, chronological split.
@@ -465,9 +474,11 @@ from typing import Any
 #
 # For production, swap this defaultdict for a Redis client.
 # The function interfaces defined below stay identical — only the implementation changes.
-_store: dict[str, dict[str, Any]] = defaultdict(
-    lambda: {"history": [], "files": []}
-)
+
+def default_session() -> dict[str, Any]:
+    return {"history": [], "files": []}
+
+_store: dict[str, dict[str, Any]] = defaultdict(default_session)
 
 
 def get_session(session_id: str) -> dict[str, Any]:
@@ -1067,9 +1078,7 @@ import torch
 import numpy as np
 from tools.stock_data import get_stock_history
 
-
 _pipeline = None
-
 
 def _get_pipeline():
     """
@@ -1184,13 +1193,14 @@ from utils.session_store import get_files
 
 server = Server("shree-tools")
 
-
 # STOCK DATA TOOLS
 # Each function's docstring is the instruction the agent reads when deciding whether to call it.
 # Write docstrings precisely — they are the agent's tool-selection guide.
 
 @server.tool()
 async def tool_get_stock_info(symbol: str, exchange: str = "NSE") -> dict:
+    """
+    # Docstring.
     """
     Get real-time price, 52-week range, PE ratio, margins, debt ratios, and analyst targets.
     Call this when the user asks about a stock's current state, price, or basic fundamentals.

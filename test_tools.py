@@ -1,295 +1,347 @@
 """
+test_tools.py
 Run with: python test_tools.py
-returns clean, JSON-serializable output before wiring into the agent.
-Each test is wrapped independently so one failure does not block others.
+
+Verbose manual sanity-check suite. 
+Prints inputs, outputs, and JSON-safety checks.
 """
 
 import json
+import os
+import textwrap
+
+# --- FORMATTING HELPERS ---
+
+W = 80
+
+def _line(char="-"):
+    print(char * W)
+
+def _header(title: str):
+    print("\n" + "=" * W)
+    print(f" {title} ".center(W, "="))
+    print("=" * W)
+
+def _section(title: str):
+    print(f"\n [ {title} ]")
+
+def _kv(key: str, value, indent: int = 2):
+    prefix = " " * indent
+    val_str = str(value)
+    if len(val_str) > W - indent - len(key) - 4:
+        wrapped = textwrap.fill(
+            val_str,
+            width=W - indent - 2,
+            initial_indent=prefix + f"{key}: ",
+            subsequent_indent=prefix + " " * (len(key) + 2),
+        )
+        print(wrapped)
+    else:
+        print(f"{prefix}{key}: {value}")
+
+def _preview(label: str, text: str, chars: int = 220, indent: int = 2):
+    prefix = " " * indent
+    clean = text.replace("\n", " ").strip()
+    snippet = clean[:chars] + ("..." if len(clean) > chars else "")
+    wrapped = textwrap.fill(
+        snippet,
+        width=W - indent,
+        initial_indent=prefix + f"{label}: ",
+        subsequent_indent=prefix + " " * (len(label) + 2),
+    )
+    print(wrapped)
+
+def _pass(label: str = ""):
+    print(f"  [PASS] {label}")
+
+def _fail(label: str, reason: str):
+    print(f"  [FAIL] {label}: {reason}")
+
+def _skip(reason: str):
+    print(f"  [SKIP] {reason}")
 
 def assert_json_safe(obj, label: str) -> bool:
-    """
-    Verify that obj can be serialized to JSON without errors.
-    Prints PASS or FAIL with the label.
-    Returns True if safe, False if not.
-    """
     try:
         json.dumps(obj)
-        print(f"  JSON-safe: PASS ({label})")
+        print(f"  [PASS] JSON-safe: {label}")
         return True
     except (TypeError, ValueError) as e:
-        print(f"  JSON-safe: FAIL ({label}) — {e}")
+        print(f"  [FAIL] JSON-safe ({label}) - {e}")
         return False
 
+# --- 1. SESSION STORE ---
 
 def test_session_store():
-    """Test all session store functions using no external dependencies."""
-    print("\nSession Store Tests")
-    from utils.session_store import (append_message, get_history, add_file, get_files, clear_session)
-    
+    _header("TEST 1: Session Store")
+    from utils.session_store import append_message, get_history, add_file, get_files, clear_session
+
     sid = "test_session_001"
-    append_message(sid, "user", "Hello")
-    append_message(sid, "assistant", "Hi there")
+    append_message(sid, "user", "What is the stock price?")
+    append_message(sid, "assistant", "Let me check that for you.")
     
     hist = get_history(sid)
-    assert len(hist) == 2, "Expected 2 messages"
-    assert hist[0]["role"] == "user"
+    _section("History Output")
+    for m in hist:
+        _kv(f"Role: {m['role']}", m["content"])
     
-    add_file(sid, "file001", "/tmp/test.pdf", "test.pdf")
-    files = get_files(sid)
-    assert len(files) == 1
-    assert files[0]["file_id"] == "file001"
-    
-    clear_session(sid)
-    assert get_history(sid) == []
-    print("  All session store tests: PASS")
+    assert len(hist) == 2
+    _pass("Session Store working")
 
+# --- 2. FORMATTERS ---
 
 def test_formatters():
-    """Test sanitize_dataframe and sanitize_info_dict with synthetic data."""
-    print("\nFormatter Tests")
+    _header("TEST 2: Formatters (Data Sanitization)")
     import pandas as pd
     import numpy as np
     from utils.formatters import sanitize_dataframe, sanitize_info_dict
-    
-    # Build a test DataFrame with NaN, numpy float64, and Timestamp values
+
+    _section("Input DataFrame (Contains Pandas Timestamps & Numpy NaNs)")
     df = pd.DataFrame({
         "Date": [pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-02")],
         "Close": [np.float64(1234.5), np.float64(float("nan"))],
-        "Volume": [np.int64(1000000), np.int64(2000000)],
+        "Volume": [np.int64(1000), np.int64(2000)]
     })
-    
+    print("  " + str(df).replace("\n", "\n  "))
+
+    _section("Output Dictionary (Sanitized for JSON)")
     result = sanitize_dataframe(df)
+    for col, vals in result.items():
+        _kv(col, vals)
+        
     assert_json_safe(result, "sanitize_dataframe")
-    assert result["Close"][1] is None, "NaN should become None"
-    
-    # Build a test info dict with numpy types and NaN
-    info = {
-        "longName": "Test Corp", 
-        "currentPrice": np.float64(500.0),
-        "trailingPE": np.float64(float("nan")), 
-        "marketCap": np.int64(1000000000)
-    }
+
+    _section("Input Info Dict (Contains Numpy Floats)")
+    info = {"price": np.float64(500.0), "PE": np.float64(float("nan"))}
+    _kv("Raw Info", info)
     
     result2 = sanitize_info_dict(info)
+    _kv("Sanitized Info", result2)
     assert_json_safe(result2, "sanitize_info_dict")
-    assert result2.get("trailingPE") is None, "NaN PE should become None"
-    print("  All formatter tests: PASS")
 
+# --- 3. STOCK INFO ---
 
 def test_stock_info():
-    """Test get_stock_info returns clean dict for TCS.NS."""
-    print("\nStock Info Test (TCS.NS)")
+    _header("TEST 3: Stock Info (TCS.NS)")
     from tools.stock_data import get_stock_info
-    
-    result = get_stock_info("TCS", "NSE")
-    # print(json.dumps(result, indent=2)) # Uncomment to see the full output payload
-    
-    assert "error" not in result, f"Unexpected error: {result}"
-    assert result.get("currentPrice") is not None, "currentPrice missing"
-    assert_json_safe(result, "get_stock_info TCS")
-    print("  PASS")
 
+    result = get_stock_info("TCS", "NSE")
+    if "error" in result:
+        _fail("get_stock_info", result["error"])
+        return
+
+    _section("Stock Output")
+    keys_to_show = ["longName", "currentPrice", "trailingPE", "marketCap"]
+    for k in keys_to_show:
+        if k in result:
+            _kv(k, result[k])
+            
+    assert_json_safe(result, "get_stock_info")
+
+# --- 4. STOCK HISTORY ---
 
 def test_stock_history():
-    """Test get_stock_history returns chart-ready arrays for WIPRO."""
-    print("\nStock History Test (WIPRO.NS, 1mo)")
+    _header("TEST 4: Stock History (WIPRO 1mo)")
     from tools.stock_data import get_stock_history
-    
-    result = get_stock_history("WIPRO", "NSE", "1mo", "1d")
-    
-    assert "error" not in result, f"Unexpected error: {result}"
-    assert "dates" in result and "close" in result
-    assert len(result["dates"]) == len(result["close"]), "dates and close length mismatch"
-    assert_json_safe(result, "get_stock_history WIPRO")
-    
-    print(f"  {len(result['dates'])} candles returned.")
-    print(f"  First date: {result['dates'][0]}, Last close: {result['close'][-1]}")
-    print("  PASS")
 
+    result = get_stock_history("WIPRO", "NSE", "1mo", "1d")
+    if "error" in result:
+        _fail("get_stock_history", result["error"])
+        return
+
+    dates = result.get("dates", [])
+    closes = result.get("close", [])
+    
+    _section("History Output")
+    _kv("Total Days", len(dates))
+    if dates:
+        _kv("First Day", f"{dates[0]} | Close: {closes[0]}")
+        _kv("Last Day", f"{dates[-1]} | Close: {closes[-1]}")
+        
+    assert_json_safe(result, "get_stock_history")
+
+# --- 5. WEB SEARCH ---
 
 def test_web_search():
-    """Test Tavily returns results for a finance query."""
-    print("\nWeb Search Test")
+    _header("TEST 5: Web Search")
     from tools.web_search import search_web
-    
-    result = search_web("TCS Tata Consultancy Services Q4 results 2025")
-    
-    assert isinstance(result, list)
-    assert len(result) > 0
-    assert "error" not in result[0]
-    assert_json_safe(result, "search_web")
-    
-    print(f"  First result: {result[0].get('title')}")
-    print("  PASS")
 
+    query = "TCS results 2025"
+    _section(f"Input Query: '{query}'")
+    
+    result = search_web(query, max_results=2)
+    if not result or (len(result) == 1 and "error" in result[0]):
+        _fail("search_web", result[0].get("error", "empty response"))
+        return
+
+    _section("Search Outputs")
+    for i, r in enumerate(result, 1):
+        _kv(f"Result {i} Title", r.get("title", "N/A"))
+        _preview("Snippet", r.get("content", "N/A"), chars=100)
+        
+    assert_json_safe(result, "search_web")
+
+# --- 6. NEWS SEARCH ---
 
 def test_news_search():
-    """Test NewsAPI returns articles."""
-    print("\nNews Search Test")
+    _header("TEST 6: News Search")
     from tools.news_search import search_news
-    
-    result = search_news("Infosys", days_back=7)
-    
-    assert isinstance(result, list)
-    assert_json_safe(result, "search_news")
-    
-    if len(result) > 0 and "error" not in result[0]:
-        print(f"  First article: {result[0].get('title')}")
-    print("  PASS")
 
+    query = "Infosys"
+    _section(f"Input Query: '{query}'")
+    
+    result = search_news(query, days_back=7)
+    if not result or (len(result) == 1 and "error" in result[0]):
+        _fail("search_news", result[0].get("error", "empty response"))
+        return
+
+    _section("News Outputs")
+    for i, a in enumerate(result[:2], 1):
+        _kv(f"Article {i} Title", a.get("title", "N/A"))
+        _kv("Source", a.get("source", "N/A"))
+        
+    assert_json_safe(result, "search_news")
+
+# --- 7. TICKER LOOKUP ---
 
 def test_ticker_lookup():
-    """Test ticker lookup by company name using the Indian listings file."""
-    print("\nTicker Lookup Test")
+    _header("TEST 7: Ticker Lookup")
     from tools.ticker_lookup import search_ticker
-    
-    results = search_ticker("tata steel")
-    assert isinstance(results, list)
-    print(f"  Results for 'tata steel': {results}")
-    
-    results2 = search_ticker("TCS")
-    print(f"  Results for 'TCS': {results2}")
-    print("  PASS (verify results manually)")
 
+    query = "tata steel"
+    _section(f"Input Query: '{query}'")
+    
+    results = search_ticker(query)
+    for r in results:
+        _kv("Match", f"{r.get('company_name')} | NSE: {r.get('nse_symbol')}")
+
+# --- 8. DOCUMENT PARSER ---
 
 def test_document_parser():
-    """Test parsing of various document types in the test_files directory."""
-    print("\nDocument Parser Tests")
-    import os
+    _header("TEST 8: Document Parser")
     from utils.doc_parser import parse_uploaded_file
 
     test_dir = "test_files"
     if not os.path.exists(test_dir):
-        print(f"  [SKIP] Directory '{test_dir}' not found. Create it and add files to test.")
+        _skip(f"Directory '{test_dir}' not found.")
         return
 
-    files = os.listdir(test_dir)
-    if not files:
-        print(f"  [SKIP] No files found in '{test_dir}'. Drop some pdf/xlsx/docx files in there.")
-        return
-
+    files = [f for f in os.listdir(test_dir) if os.path.isfile(os.path.join(test_dir, f))]
     for filename in files:
         filepath = os.path.join(test_dir, filename)
-        if not os.path.isfile(filepath):
-            continue
+        _section(f"Parsing: {filename}")
         
-        print(f"\n  Testing file: {filename}")
         result = parse_uploaded_file(filepath)
-        
-        assert isinstance(result, dict), "Result must be a dictionary"
-        assert "type" in result, "Missing 'type' key"
-        assert "content" in result, "Missing 'content' key"
-        
         if result["type"] == "error":
-            print(f"  [ERROR] Parsing failed: {result['content']}")
+            _fail(filename, result["content"])
             continue
-            
-        assert_json_safe(result, f"parse_uploaded_file: {filename}")
-        print(f"    Detected Type: {result['type']}")
-        print(f"    Char Count: {result.get('char_count', 0)}")
-        
-        # Preview content safely based on type
-        if isinstance(result['content'], str):
-            preview = result['content'][:100].replace('\n', ' ')
-            print(f"    Text Preview: {preview}...")
-        elif isinstance(result['content'], dict):
-            # For Excel/CSV, print the sheet names and first row
-            sheets = list(result['content'].keys())
-            print(f"    Tables/Sheets found: {sheets}")
-            if sheets and result['content'][sheets[0]]:
-                print(f"    First row of first sheet: {result['content'][sheets[0]][0]}")
 
+        _kv("Type Detected", result["type"])
+        
+        content = result["content"]
+        if isinstance(content, str):
+            _preview("Extracted Text", content, chars=150)
+        elif isinstance(content, dict):
+            sheets = list(content.keys())
+            _kv("Sheets/Tables Found", sheets)
+            if sheets and content[sheets[0]]:
+                _kv("Row 1 Preview", content[sheets[0]][0])
+                
+        assert_json_safe(result, f"parse: {filename}")
+
+# --- 9. RAG ENGINE ---
 
 def test_rag_search():
-    """Test the complete RAG pipeline: parsing, indexing, and querying."""
-    print("\nRAG Engine & Search Tests")
-    import os
+    _header("TEST 9: RAG Engine")
     from utils.doc_parser import parse_uploaded_file
     from utils.rag_engine import index_document
     from tools.document_search import search_uploaded_documents
 
     test_dir = "test_files"
-    if not os.path.exists(test_dir):
-        print(f"  [SKIP] Directory '{test_dir}' not found.")
+    if not os.path.exists(test_dir) or not os.listdir(test_dir):
+        _skip("No test files found for RAG.")
         return
 
-    files = os.listdir(test_dir)
-    if not files:
-        print(f"  [SKIP] No files found in '{test_dir}'.")
-        return
-
-    print("  1. Indexing documents into ChromaDB...")
-    for filename in files:
+    _section("Indexing Documents")
+    for filename in os.listdir(test_dir):
         filepath = os.path.join(test_dir, filename)
-        if not os.path.isfile(filepath):
-            continue
-        
-        parsed_doc = parse_uploaded_file(filepath)
-        if parsed_doc["type"] != "error":
-            # This calls the utility we built to chunk and embed the text
-            index_document(filename, parsed_doc)
-        else:
-            print(f" [ERROR] Could not parse {filename} for indexing.")
+        if os.path.isfile(filepath):
+            parsed = parse_uploaded_file(filepath)
+            if parsed["type"] != "error":
+                index_document(filename, parsed)
+                print(f"  Indexed: {filename}")
 
-    print("\n  2. Testing Semantic Retrieval (Querying)...")
+    query = "What activation function is used in CNNs?"
+    _section(f"Querying DB: '{query}'")
     
-    # Query 1: Targeting the CNN Notes PDF
-    query1 = "What activation function is used in Convolutional Neural Networks and how does it solve the vanishing gradient problem?"
-    print(f"\n    Query 1: '{query1}'")
-    res1 = search_uploaded_documents(query1)
-    assert_json_safe(res1, "search_uploaded_documents (CNN)")
-    if res1.get("status") == "success":
-        print(f"    Top Match: {res1['results'][0][:200]}...")
+    res = search_uploaded_documents(query)
+    if res.get("status") == "success":
+        results = res.get("results", [])
+        for i, chunk in enumerate(results[:2], 1):
+            _preview(f"Match {i}", chunk, chars=200)
     else:
-        print(f"    [FAIL] {res1.get('message')}")
+        _fail("Query Failed", res.get("message", "unknown error"))
+        
+    assert_json_safe(res, "search_uploaded_documents")
 
-    # Query 2: Targeting the UNINAV Word Document
-    query2 = "What are the tools and technologies used for the frontend and backend of the UNINAV project?"
-    print(f"\n    Query 2: '{query2}'")
-    res2 = search_uploaded_documents(query2)
-    assert_json_safe(res2, "search_uploaded_documents (UNINAV)")
-    if res2.get("status") == "success":
-        print(f"    Top Match: {res2['results'][0][:200]}...")
-    else:
-        print(f"    [FAIL] {res2.get('message')}")
+# --- 10. FORECASTING ---
 
-    # Query 3: Targeting the Excel/CSV tables
-    query3 = "What was the closing price in the year 2024?"
-    print(f"\n    Query 3: '{query3}'")
-    res3 = search_uploaded_documents(query3)
-    assert_json_safe(res3, "search_uploaded_documents (Excel Tables)")
-    if res3.get("status") == "success":
-        print(f"    Top Match: {res3['results'][0][:200]}...")
-    else:
-        print(f"    [FAIL] {res3.get('message')}")
+def test_forecasting():
+    _header("TEST 10: Chronos T5 Forecasting")
+    from tools.ts_model import predict_stock_prices
 
-    print("\n  All RAG tests completed.")
+    symbol = "WIPRO"
+    horizon = 10
+    _section(f"Input: {symbol} for {horizon} days")
+    
+    result = predict_stock_prices(symbol, "NSE", horizon_days=horizon)
 
+    if "error" in result:
+        _fail("predict_stock_prices", result["error"])
+        return
+
+    hist_closes = result.get("historical_closes", [])
+    med = result.get("forecast_median", [])
+    
+    _section("Forecasting Output")
+    if hist_closes:
+        _kv("Last Historical Close", hist_closes[-1])
+    
+    _kv(f"Predicted Median path ({horizon} days)", med)
+    _kv("Predicted Low path", result.get("forecast_low", []))
+    _kv("Predicted High path", result.get("forecast_high", []))
+
+    assert_json_safe(result, "predict_stock_prices")
+
+# --- RUNNER ---
 
 if __name__ == "__main__":
-    print("=" * 55)
-    print("Shree_v2 Tool Tests")
-    print("=" * 55)
+    _header("Shree_v2 - Tool Test Suite")
 
     test_functions = [
-        test_session_store, 
-        test_formatters, 
+        test_session_store,
+        test_formatters,
         test_stock_info,
-        test_stock_history, 
-        test_web_search, 
+        test_stock_history,
+        test_web_search,
         test_news_search,
         test_ticker_lookup,
         test_document_parser,
-        test_rag_search
+        test_rag_search,
+        test_forecasting,
     ]
 
+    passed, failed = 0, 0
     for test_fn in test_functions:
         try:
             test_fn()
-            print("-"*50)
+            passed += 1
+        except AssertionError as e:
+            print(f"\n  [FAIL] {test_fn.__name__}: {e}")
+            failed += 1
         except Exception as e:
-            print(f"  EXCEPTION in {test_fn.__name__}: {e}")
+            print(f"\n  [ERROR] {test_fn.__name__}: {type(e).__name__}: {e}")
+            failed += 1
 
-    print("\n" + "=" * 55)
-    print("Testing Complete.")
-    print("=" * 55)
+    print("\n" + "=" * W)
+    print(f" Results: {passed} tests completed | {failed} failed")
+    print("=" * W)

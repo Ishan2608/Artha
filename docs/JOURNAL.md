@@ -92,3 +92,12 @@ Implemented functions to take a Company Name, even if incomplete, and return its
 - Build client object for both.
 - Get results based on query.
 - Filter individual result in result, including data in cleaned manner and returning the list of cleaned results.
+
+## Implement RAG
+- Use Chromas DB
+- Implement rag_engine.py in utils.
+- Implement document_search.py in tools.
+
+## Implement Time Series Forcasting Model Tool.
+- Import Amazon's t5 tiny model.
+- Update test_tools.py

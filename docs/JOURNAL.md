@@ -85,6 +85,10 @@ Implemented functions to take a Company Name, even if incomplete, and return its
 - Share Holders Data
 - Upcoming Events.
 
-
 > To run a file from a folder, keeping the Root Folder as the Root Folder during compile time so that imports from other folders are resolved properly, use this command: python -m tools.stock_data
 
+## Implement Web Search and News Search
+- Both Tavily and NewsAPI have their respective Python SDK.
+- Build client object for both.
+- Get results based on query.
+- Filter individual result in result, including data in cleaned manner and returning the list of cleaned results.

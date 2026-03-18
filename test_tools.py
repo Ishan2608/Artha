@@ -1,6 +1,5 @@
 """
-Manual test script. Run with: python test_tools.py
-Not a pytest suite. A quick sanity check to confirm each tool function
+Run with: python test_tools.py
 returns clean, JSON-serializable output before wiring into the agent.
 Each test is wrapped independently so one failure does not block others.
 """
@@ -157,7 +156,7 @@ def test_document_parser():
     """Test parsing of various document types in the test_files directory."""
     print("\nDocument Parser Tests")
     import os
-    from tools.doc_parser import parse_uploaded_file
+    from utils.doc_parser import parse_uploaded_file
 
     test_dir = "test_files"
     if not os.path.exists(test_dir):
@@ -200,6 +199,73 @@ def test_document_parser():
             if sheets and result['content'][sheets[0]]:
                 print(f"    First row of first sheet: {result['content'][sheets[0]][0]}")
 
+
+def test_rag_search():
+    """Test the complete RAG pipeline: parsing, indexing, and querying."""
+    print("\nRAG Engine & Search Tests")
+    import os
+    from utils.doc_parser import parse_uploaded_file
+    from utils.rag_engine import index_document
+    from tools.document_search import search_uploaded_documents
+
+    test_dir = "test_files"
+    if not os.path.exists(test_dir):
+        print(f"  [SKIP] Directory '{test_dir}' not found.")
+        return
+
+    files = os.listdir(test_dir)
+    if not files:
+        print(f"  [SKIP] No files found in '{test_dir}'.")
+        return
+
+    print("  1. Indexing documents into ChromaDB...")
+    for filename in files:
+        filepath = os.path.join(test_dir, filename)
+        if not os.path.isfile(filepath):
+            continue
+        
+        parsed_doc = parse_uploaded_file(filepath)
+        if parsed_doc["type"] != "error":
+            # This calls the utility we built to chunk and embed the text
+            index_document(filename, parsed_doc)
+        else:
+            print(f" [ERROR] Could not parse {filename} for indexing.")
+
+    print("\n  2. Testing Semantic Retrieval (Querying)...")
+    
+    # Query 1: Targeting the CNN Notes PDF
+    query1 = "What activation function is used in Convolutional Neural Networks and how does it solve the vanishing gradient problem?"
+    print(f"\n    Query 1: '{query1}'")
+    res1 = search_uploaded_documents(query1)
+    assert_json_safe(res1, "search_uploaded_documents (CNN)")
+    if res1.get("status") == "success":
+        print(f"    Top Match: {res1['results'][0][:200]}...")
+    else:
+        print(f"    [FAIL] {res1.get('message')}")
+
+    # Query 2: Targeting the UNINAV Word Document
+    query2 = "What are the tools and technologies used for the frontend and backend of the UNINAV project?"
+    print(f"\n    Query 2: '{query2}'")
+    res2 = search_uploaded_documents(query2)
+    assert_json_safe(res2, "search_uploaded_documents (UNINAV)")
+    if res2.get("status") == "success":
+        print(f"    Top Match: {res2['results'][0][:200]}...")
+    else:
+        print(f"    [FAIL] {res2.get('message')}")
+
+    # Query 3: Targeting the Excel/CSV tables
+    query3 = "What was the closing price in the year 2024?"
+    print(f"\n    Query 3: '{query3}'")
+    res3 = search_uploaded_documents(query3)
+    assert_json_safe(res3, "search_uploaded_documents (Excel Tables)")
+    if res3.get("status") == "success":
+        print(f"    Top Match: {res3['results'][0][:200]}...")
+    else:
+        print(f"    [FAIL] {res3.get('message')}")
+
+    print("\n  All RAG tests completed.")
+
+
 if __name__ == "__main__":
     print("=" * 55)
     print("Shree_v2 Tool Tests")
@@ -213,12 +279,14 @@ if __name__ == "__main__":
         test_web_search, 
         test_news_search,
         test_ticker_lookup,
-        test_document_parser
+        test_document_parser,
+        test_rag_search
     ]
 
     for test_fn in test_functions:
         try:
             test_fn()
+            print("-"*50)
         except Exception as e:
             print(f"  EXCEPTION in {test_fn.__name__}: {e}")
 

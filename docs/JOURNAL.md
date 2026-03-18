@@ -72,3 +72,19 @@ In development mode, we maintain an in-memory session, i.e., in RAM. Data is los
 - Both had different columns names for same columns. E.g., In NSE List = Symbol, and in BSE List = Security Id. Had to rename names for consistency.
 - BSE List (CSV file) was terrible. Extra leading commas at the end of each row confused pandas. It had to be significantly cleaned.
 - A merged CSV file was created using the JOIN on the ISIN column.
+
+## Ticker Builders for Getting Right Data.
+Implemented functions to take a Company Name, even if incomplete, and return its ticker according to exchange.
+
+## Implement Stock Data Fetching Tools.
+- Historical OHLC Data.
+- ESG Reports
+- Financials
+- Corporate Actions
+- Base Analyses
+- Share Holders Data
+- Upcoming Events.
+
+
+> To run a file from a folder, keeping the Root Folder as the Root Folder during compile time so that imports from other folders are resolved properly, use this command: python -m tools.stock_data
+

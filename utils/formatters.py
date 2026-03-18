@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import typing import Any
+from typing import Any
 
 def sanitize_dataframe(df: pd.DataFrame) -> dict[str, list]:
   """
@@ -42,8 +42,8 @@ def sanitize_dataframe(df: pd.DataFrame) -> dict[str, list]:
       else:
         clean_col.append(value)
         
-    result[col] = clean_col
-  return result
+    results[col] = clean_col
+  return results
 
 
 def sanitize_info_dict(info: dict) -> dict:
@@ -71,20 +71,20 @@ def sanitize_info_dict(info: dict) -> dict:
      "earningsGrowth", "totalRevenue", "totalDebt", "freeCashflow"
    ]
 
-   result = {}
-   for key in WHITELIST:
+  result = {}
+  for key in WHITELIST:
     value = info.get(key)
     if value is None: 
         result[key] = None
-    elif isinstance(value, float) and np.isnan(val):
+    elif isinstance(value, float) and np.isnan(value):
         result[key] = None
     elif isinstance(value, np.integer):
-        result[key] = int(val)
+        result[key] = int(value)
     elif isinstance(value, np.floating):
-        result[key] = round(float(value, 4))
+        result[key] = round(float(value), 4)
     else:
         result[key] = value
-  return result.
+  return result
 
 
 

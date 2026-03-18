@@ -6,68 +6,135 @@ _lookup_table: dict[str, dict] = {}
 _listings_path = os.path.join("data", "listings", "INDIA_LIST.csv")
 
 def _load_listings() -> None:
+    """
+    Loads stock market listings from a CSV file into a global in-memory dictionary.
+    
+    Reads 'INDIA_LIST.csv', cleans formatting anomalies (like 'N/A' strings and 
+    '.0' float suffixes on security codes), and maps each company's name, NSE symbol, 
+    BSE symbol, and BSE code to a unified data dictionary. This enables instant O(1) 
+    lookups across different identifiers without repeatedly accessing the disk.
+    """
     global _lookup_table
 
-    # TODO 1: Check if _listings_path exists. If not, print a warning and return.
+    # 1: Check if file exists
     if not os.path.exists(_listings_path):
-        print(f"WARNING: LISTING TABLE MISSING")
+        print(f"Warning: {_listings_path} not found. Ticker lookup will return no results.")
         return
     
-    # TODO 2: Read the CSV using pandas.
-    # - Use dtype=str to prevent pandas from auto-converting codes/ISINs.
-    # - Use df.replace(["N/A", "nan", "NA", "-"], "") to clean literal string artifacts.
-    # - Use df.fillna("") to replace actual NaN values with empty strings.
+    # 2: Read and clean the CSV
+    df = pd.read_csv(_listings_path, dtype=str)
+    df = df.replace(["N/A", "nan", "NA", "-", "NaN"], "")
+    df = df.fillna("")
 
-    # TODO 3: Iterate through the rows. (Use `for index, row in df.iterrows():` since column names have spaces like 'Security Code')
-    
-    # TODO 4: Inside the loop, extract and clean the 5 core variables:
-    # - isin = str(row['ISIN']).strip()
-    # - company_name = str(row['Company_Name']).strip()
-    # - nse_symbol = str(row['NSE_Symbol']).strip()
-    # - bse_symbol = str(row['BSE_Symbol']).strip()
-    # - bse_code_raw = str(row['Security Code']).strip()
-    
-    # TODO 5: Fix the BSE Code float issue. 
-    # If bse_code_raw ends with ".0", remove it (e.g., "890232.0" -> "890232").
-    # Save the cleaned result as `bse_code`.
+    # 3: Iterate through rows
+    for index, row in df.iterrows():
+        
+        # 4: Extract and strip variables
+        isin = str(row.get('ISIN', '')).strip()
+        company_name = str(row.get('Company_Name', '')).strip()
+        nse_symbol = str(row.get('NSE_Symbol', '')).strip()
+        bse_symbol = str(row.get('BSE_Symbol', '')).strip()
+        bse_code_raw = str(row.get('Security Code', '')).strip()
+        
+        # 5: Fix the BSE Code float issue ("890232.0" -> "890232")
+        if bse_code_raw.endswith(".0"):
+            bse_code = bse_code_raw[:-2]
+        else:
+            bse_code = bse_code_raw
 
-    # TODO 6: Skip this row entirely if `isin` is empty.
+        # 6: Skip empty ISINs
+        if not isin:
+            continue
 
-    # TODO 7: Create the `entry` dictionary for this row:
-    # { "company_name": company_name, "nse_symbol": nse_symbol, "bse_symbol": bse_symbol, "bse_code": bse_code, "isin": isin }
+        # 7: Create the entry dictionary
+        entry = {
+            "company_name": company_name,
+            "nse_symbol": nse_symbol,
+            "bse_symbol": bse_symbol,
+            "bse_code": bse_code,
+            "isin": isin
+        }
 
-    # TODO 8: Add the entry to _lookup_table under 4 possible keys (convert alphabetic keys to lowercase!):
-    # - if company_name != "": _lookup_table[company_name.lower()] = entry
-    # - if nse_symbol != "": _lookup_table[nse_symbol.lower()] = entry
-    # - if bse_symbol != "": _lookup_table[bse_symbol.lower()] = entry
-    # - if bse_code != "": _lookup_table[bse_code] = entry
+        # 8: Add to lookup table under all available keys
+        if company_name:
+            _lookup_table[company_name.lower()] = entry
+        if nse_symbol:
+            _lookup_table[nse_symbol.lower()] = entry
+        if bse_symbol:
+            _lookup_table[bse_symbol.lower()] = entry
+        if bse_code:
+            _lookup_table[bse_code] = entry
 
-    # TODO 9: Print an initialization message: f"Loaded {len(_lookup_table)} lookup keys from INDIA_LIST."
-    pass
+    # 9: Initialization message
+    print(f"Loaded {len(_lookup_table)} lookup keys from INDIA_LIST.")
 
 
 def search_ticker(query: str) -> list[dict]:
-    # TODO 10: If _lookup_table is empty, call _load_listings().
+    """
+    Searches the in-memory lookup table for a stock using a user's query.
+    
+    Args:
+        query (str): The company name, ticker symbol, or security code to search for.
+        
+    Returns:
+        list[dict]: A list of up to 5 matching company dictionaries. Results are 
+                    prioritized by exact matches, followed by prefix matches 
+                    (starts with), and then substring matches (contains). 
+                    Duplicates are filtered out using the company's ISIN.
+    """
+    # 10: Lazy load if empty
+    if not _lookup_table:
+        _load_listings()
 
-    # TODO 11: Clean the query: `query_lower = query.strip().lower()`. If empty, return [].
+    # 11: Clean query
+    query_lower = query.strip().lower()
+    if not query_lower:
+        return []
 
-    # TODO 12: EXACT MATCH PASS
-    # Check `if query_lower in _lookup_table`. If True, return `[_lookup_table[query_lower]]` immediately.
+    # 12: Exact match check (O(1) speed)
+    if query_lower in _lookup_table:
+        return [_lookup_table[query_lower]]
 
-    # TODO 13: Setup for fuzzy search. 
-    # Initialize `starts_with = []`, `contains = []`, and `seen_isins = set()`.
+    # 13: Setup for fuzzy search
+    starts_with = []
+    contains = []
+    seen_isins = set()
 
-    # TODO 14: FUZZY MATCH PASS
-    # Iterate through `for key, entry in _lookup_table.items():`
-    # Extract `current_isin = entry['isin']`.
-    # If `current_isin` is already in `seen_isins`, `continue` (skip to next iteration to prevent duplicates).
+    # 14 & 15: Fuzzy match iteration
+    for key, entry in _lookup_table.items():
+        current_isin = entry['isin']
+        
+        if current_isin in seen_isins:
+            continue
+            
+        if key.startswith(query_lower):
+            starts_with.append(entry)
+            seen_isins.add(current_isin)
+        elif query_lower in key:
+            contains.append(entry)
+            seen_isins.add(current_isin)
 
-    # TODO 15: Check for partial matches inside the loop:
-    # - If `key.startswith(query_lower)`: append `entry` to `starts_with` and add `current_isin` to `seen_isins`.
-    # - Elif `query_lower in key`: append `entry` to `contains` and add `current_isin` to `seen_isins`.
-
-    # TODO 16: Combine and return the top 5 results: `return (starts_with + contains)[:5]`
-    pass
+    # 16: Combine and limit results
+    return (starts_with + contains)[:5]
 
 # Run on import
 _load_listings()
+
+
+# TEST THE FUNCTIONS USING THIS CODE.
+if __name__ == "__main__":
+    print("\n--- Testing Exact Match (TCS) ---")
+    results = search_ticker("TCS")
+    for r in results: print(r)
+
+    print("\n--- Testing Partial/Fuzzy Match (HDFC) ---")
+    results = search_ticker("HDFC")
+    for r in results: print(r)
+
+    print("\n--- Testing BSE Code Match (500180) ---")
+    results = search_ticker("500180")
+    for r in results: print(r)
+
+    print("\n--- Testing Invalid Query ---")
+    results = search_ticker("FAKECOMPANYNAME123")
+    print(results)

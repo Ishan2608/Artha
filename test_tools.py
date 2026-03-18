@@ -153,6 +153,53 @@ def test_ticker_lookup():
     print("  PASS (verify results manually)")
 
 
+def test_document_parser():
+    """Test parsing of various document types in the test_files directory."""
+    print("\nDocument Parser Tests")
+    import os
+    from tools.doc_parser import parse_uploaded_file
+
+    test_dir = "test_files"
+    if not os.path.exists(test_dir):
+        print(f"  [SKIP] Directory '{test_dir}' not found. Create it and add files to test.")
+        return
+
+    files = os.listdir(test_dir)
+    if not files:
+        print(f"  [SKIP] No files found in '{test_dir}'. Drop some pdf/xlsx/docx files in there.")
+        return
+
+    for filename in files:
+        filepath = os.path.join(test_dir, filename)
+        if not os.path.isfile(filepath):
+            continue
+        
+        print(f"\n  Testing file: {filename}")
+        result = parse_uploaded_file(filepath)
+        
+        assert isinstance(result, dict), "Result must be a dictionary"
+        assert "type" in result, "Missing 'type' key"
+        assert "content" in result, "Missing 'content' key"
+        
+        if result["type"] == "error":
+            print(f"  [ERROR] Parsing failed: {result['content']}")
+            continue
+            
+        assert_json_safe(result, f"parse_uploaded_file: {filename}")
+        print(f"    Detected Type: {result['type']}")
+        print(f"    Char Count: {result.get('char_count', 0)}")
+        
+        # Preview content safely based on type
+        if isinstance(result['content'], str):
+            preview = result['content'][:100].replace('\n', ' ')
+            print(f"    Text Preview: {preview}...")
+        elif isinstance(result['content'], dict):
+            # For Excel/CSV, print the sheet names and first row
+            sheets = list(result['content'].keys())
+            print(f"    Tables/Sheets found: {sheets}")
+            if sheets and result['content'][sheets[0]]:
+                print(f"    First row of first sheet: {result['content'][sheets[0]][0]}")
+
 if __name__ == "__main__":
     print("=" * 55)
     print("Shree_v2 Tool Tests")
@@ -165,7 +212,8 @@ if __name__ == "__main__":
         test_stock_history, 
         test_web_search, 
         test_news_search,
-        test_ticker_lookup
+        test_ticker_lookup,
+        test_document_parser
     ]
 
     for test_fn in test_functions:

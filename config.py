@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     GEMINI_API_KEY: str
+    GROQ_API_KEY: str
     TAVILY_API_KEY: str
     NEWS_API_KEY: str
     UPLOAD_DIR: str = "uploads"

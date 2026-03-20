@@ -2,32 +2,55 @@
 test_tools.py
 Run with: python test_tools.py
 
-Verbose manual sanity-check suite. 
-Prints inputs, outputs, and JSON-safety checks.
+Verbose manual sanity-check suite.
+Prints inputs, outputs, and JSON-safety checks with coloured output.
 """
 
 import json
 import os
 import textwrap
+import time
+import traceback
 
-# --- FORMATTING HELPERS ---
+# ── Colour support ────────────────────────────────────────────────────────────
+try:
+    from colorama import init as colorama_init, Fore, Back, Style
+    colorama_init(autoreset=True)
+except ImportError:
+    class Fore:
+        RED = GREEN = YELLOW = CYAN = MAGENTA = BLUE = WHITE = ""
+    class Back:
+        RED = GREEN = YELLOW = ""
+    class Style:
+        BRIGHT = DIM = RESET_ALL = ""
 
+# ── Constants ─────────────────────────────────────────────────────────────────
 W = 80
+_results: list[dict] = []   # Accumulates {name, status, duration, reason}
 
-def _line(char="-"):
-    print(char * W)
 
-def _header(title: str):
-    print("\n" + "=" * W)
-    print(f" {title} ".center(W, "="))
-    _line()
+# ─────────────────────────────────────────────────────────────────────────────
+# FORMATTING HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _line(char="─", color=Style.DIM):
+    print(f"{color}{char * W}{Style.RESET_ALL}")
+
+def _header(title: str, number: int | None = None):
+    print()
+    print(f"{Fore.CYAN}{Style.BRIGHT}{'═' * W}{Style.RESET_ALL}")
+    label = f"  TEST {number}: {title}  " if number else f"  {title}  "
+    print(f"{Fore.CYAN}{Style.BRIGHT}{label.center(W)}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{Style.BRIGHT}{'═' * W}{Style.RESET_ALL}")
 
 def _section(title: str):
-    print(f"\n [ {title} ]")
+    print(f"\n{Fore.YELLOW}{Style.BRIGHT}  ▸ {title}{Style.RESET_ALL}")
 
-def _kv(key: str, value, indent: int = 2):
+def _kv(key: str, value, indent: int = 4, value_color: str = Fore.WHITE):
     prefix = " " * indent
+    key_str = f"{Fore.CYAN}{key}{Style.RESET_ALL}"
     val_str = str(value)
+    full = f"{prefix}{key_str}: {value_color}{val_str}{Style.RESET_ALL}"
     if len(val_str) > W - indent - len(key) - 4:
         wrapped = textwrap.fill(
             val_str,
@@ -35,313 +58,530 @@ def _kv(key: str, value, indent: int = 2):
             initial_indent=prefix + f"{key}: ",
             subsequent_indent=prefix + " " * (len(key) + 2),
         )
-        print(wrapped)
+        print(f"{prefix}{key_str}:\n{value_color}{wrapped}{Style.RESET_ALL}")
     else:
-        print(f"{prefix}{key}: {value}")
+        print(full)
 
-def _preview(label: str, text: str, chars: int = 220, indent: int = 2):
+def _preview(label: str, text: str, chars: int = 220, indent: int = 4):
     prefix = " " * indent
     clean = text.replace("\n", " ").strip()
-    snippet = clean[:chars] + ("..." if len(clean) > chars else "")
+    snippet = clean[:chars] + (f"{Style.DIM}…{Style.RESET_ALL}" if len(clean) > chars else "")
     wrapped = textwrap.fill(
-        snippet,
+        clean[:chars],
         width=W - indent,
-        initial_indent=prefix + f"{label}: ",
+        initial_indent=prefix + f"{Fore.CYAN}{label}{Style.RESET_ALL}: {Fore.WHITE}",
         subsequent_indent=prefix + " " * (len(label) + 2),
     )
-    print(wrapped)
+    print(wrapped + (f"{Style.DIM}…{Style.RESET_ALL}" if len(clean) > chars else "") + Style.RESET_ALL)
 
 def _pass(label: str = ""):
-    print(f"  [PASS] {label}")
+    print(f"    {Back.GREEN}{Fore.WHITE}{Style.BRIGHT} PASS {Style.RESET_ALL} {Fore.GREEN}{label}{Style.RESET_ALL}")
 
 def _fail(label: str, reason: str):
-    print(f"  [FAIL] {label}: {reason}")
+    print(f"    {Back.RED}{Fore.WHITE}{Style.BRIGHT} FAIL {Style.RESET_ALL} {Fore.RED}{label}{Style.RESET_ALL}: {Style.DIM}{reason}{Style.RESET_ALL}")
 
 def _skip(reason: str):
-    print(f"  [SKIP] {reason}")
+    print(f"    {Back.YELLOW}{Fore.WHITE}{Style.BRIGHT} SKIP {Style.RESET_ALL} {Fore.YELLOW}{reason}{Style.RESET_ALL}")
+
+def _info(msg: str, indent: int = 4):
+    print(f"{' ' * indent}{Style.DIM}{msg}{Style.RESET_ALL}")
 
 def assert_json_safe(obj, label: str) -> bool:
     try:
         json.dumps(obj)
-        print(f"  [PASS] JSON-safe: {label}")
+        _pass(f"JSON-serializable: {label}")
         return True
     except (TypeError, ValueError) as e:
-        print(f"  [FAIL] JSON-safe ({label}) - {e}")
+        _fail(f"JSON-serializable: {label}", str(e))
         return False
 
-# --- 1. SESSION STORE ---
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST RUNNER DECORATOR
+# Records pass/fail/duration for the final summary table.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _run(name: str, fn):
+    t0 = time.perf_counter()
+    status, reason = "PASS", ""
+    try:
+        fn()
+    except AssertionError as e:
+        status, reason = "FAIL", str(e)
+        print(f"\n    {Back.RED}{Fore.WHITE}{Style.BRIGHT} ASSERTION FAILED {Style.RESET_ALL} {Fore.RED}{e}{Style.RESET_ALL}")
+    except Exception as e:
+        status, reason = "ERROR", f"{type(e).__name__}: {e}"
+        print(f"\n    {Back.RED}{Fore.WHITE}{Style.BRIGHT} EXCEPTION {Style.RESET_ALL} {Fore.RED}{reason}{Style.RESET_ALL}")
+        _info(traceback.format_exc())
+    duration = time.perf_counter() - t0
+    _results.append({"name": name, "status": status, "duration": duration, "reason": reason})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TESTS
+# ─────────────────────────────────────────────────────────────────────────────
 
 def test_session_store():
-    _header("TEST 1: Session Store")
+    _header("Session Store", 1)
     from utils.session_store import append_message, get_history, add_file, get_files, clear_session
 
     sid = "test_session_001"
-    append_message(sid, "user", "What is the stock price?")
-    append_message(sid, "assistant", "Let me check that for you.")
-    
-    hist = get_history(sid)
-    _section("History Output")
-    for m in hist:
-        _kv(f"Role: {m['role']}", m["content"])
-    
-    assert len(hist) == 2
-    _pass("Session Store working")
 
-# --- 2. FORMATTERS ---
+    _section("Appending messages")
+    append_message(sid, "user", "What is the stock price of TCS?")
+    append_message(sid, "assistant", "Let me check that for you.")
+    _info("Appended 2 messages (user + assistant)")
+
+    _section("Retrieving history")
+    hist = get_history(sid)
+    for m in hist:
+        role_color = Fore.BLUE if m["role"] == "user" else Fore.GREEN
+        _kv(m["role"].capitalize(), m["content"], value_color=role_color)
+
+    assert len(hist) == 2, f"Expected 2 messages, got {len(hist)}"
+    _pass("History length correct (2 messages)")
+
+    _section("Adding a dummy file entry")
+    add_file(sid, "file_001", "/tmp/test.pdf", "test.pdf")
+    files = get_files(sid)
+    assert len(files) == 1
+    _kv("Registered file", files[0]["filename"])
+    _kv("File ID", files[0]["file_id"])
+    _pass("File registered in session")
+
+    _section("Clearing session")
+    clear_session(sid)
+    assert get_history(sid) == []
+    assert get_files(sid) == []
+    _pass("Session cleared successfully")
+
 
 def test_formatters():
-    _header("TEST 2: Formatters (Data Sanitization)")
+    _header("Formatters — Data Sanitization", 2)
     import pandas as pd
     import numpy as np
     from utils.formatters import sanitize_dataframe, sanitize_info_dict
 
-    _section("Input DataFrame (Contains Pandas Timestamps & Numpy NaNs)")
+    _section("sanitize_dataframe: Pandas Timestamps + Numpy NaN → plain Python")
     df = pd.DataFrame({
-        "Date": [pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-02")],
-        "Close": [np.float64(1234.5), np.float64(float("nan"))],
-        "Volume": [np.int64(1000), np.int64(2000)]
+        "Date":   [pd.Timestamp("2024-01-01"), pd.Timestamp("2024-01-02")],
+        "Close":  [np.float64(1234.5),          np.float64(float("nan"))],
+        "Volume": [np.int64(1_000_000),          np.int64(2_000_000)],
     })
-    print("  " + str(df).replace("\n", "\n  "))
-
-    _section("Output Dictionary (Sanitized for JSON)")
+    _info("Input dtypes: " + ", ".join(f"{c}={df[c].dtype}" for c in df.columns))
     result = sanitize_dataframe(df)
     for col, vals in result.items():
         _kv(col, vals)
-        
     assert_json_safe(result, "sanitize_dataframe")
 
-    _section("Input Info Dict (Contains Numpy Floats)")
-    info = {"price": np.float64(500.0), "PE": np.float64(float("nan"))}
-    _kv("Raw Info", info)
-    
-    result2 = sanitize_info_dict(info)
-    _kv("Sanitized Info", result2)
+    _section("sanitize_info_dict: Numpy scalars + NaN → plain Python / None")
+    raw_info = {
+        "longName":                  "Tata Consultancy Services Limited",
+        "shortName":                 "TCS",
+        "currentPrice":              np.float64(3921.50),
+        "previousClose":             np.float64(3905.00),
+        "open":                      np.float64(3910.00),
+        "dayHigh":                   np.float64(3935.75),
+        "dayLow":                    np.float64(3898.20),
+        "volume":                    np.int64(1_234_567),
+        "marketCap":                 np.int64(1_420_000_000_000),
+        "financialCurrency":         "INR",
+        "typeDisp":                  "Equity",
+        "exchange":                  "NSE",
+        "fiftyTwoWeekHigh":          np.float64(4255.00),
+        "fiftyTwoWeekLow":           np.float64(3196.00),
+        "fiftyTwoWeekChangePercent": np.float64(0.142),
+        "fiftyDayAverage":           np.float64(3875.30),
+        "twoHundredDayAverage":      np.float64(3750.80),
+        "trailingPE":                np.float64(28.4),
+        "forwardPE":                 np.float64(25.1),
+        "priceToBook":               np.float64(12.3),
+        "dividendYield":             np.float64(float("nan")),   # NaN — should sanitize
+        "targetMeanPrice":           np.float64(4100.00),
+        "targetHighPrice":           np.float64(4500.00),
+        "targetLowPrice":            np.float64(3700.00),
+        "recommendationKey":         "buy",
+        "currentRatio":              np.float64(float("nan")),   # NaN — should sanitize
+        "debtToEquity":              np.float64(0.0),
+        "returnOnEquity":            np.float64(0.478),
+        "returnOnAssets":            np.float64(0.212),
+        "grossMargins":              np.float64(0.341),
+        "operatingMargins":          np.float64(0.241),
+        "profitMargins":             np.float64(0.189),
+        "revenueGrowth":             np.float64(0.062),
+        "earningsGrowth":            np.float64(0.084),
+        "totalRevenue":              np.int64(2_408_610_000_000),
+        "totalDebt":                 np.int64(0),
+        "freeCashflow":              np.int64(380_000_000_000),
+    }
+    _info(f"Input has {len(raw_info)} keys, 2 intentional NaNs (dividendYield, currentRatio)")
+    result2 = sanitize_info_dict(raw_info)
+    for k, v in result2.items():
+        _kv(k, v, value_color=Fore.YELLOW if v is None else Fore.WHITE)
     assert_json_safe(result2, "sanitize_info_dict")
 
-# --- 3. STOCK INFO ---
 
 def test_stock_info():
-    _header("TEST 3: Stock Info (TCS.NS)")
+    _header("Stock Info — TCS (NSE)", 3)
     from tools.stock_data import get_stock_info
 
+    _section("Fetching from Yahoo Finance…")
     result = get_stock_info("TCS", "NSE")
+
     if "error" in result:
         _fail("get_stock_info", result["error"])
         return
 
-    _section("Stock Output")
-    keys_to_show = ["longName", "currentPrice", "trailingPE", "marketCap"]
-    for k in keys_to_show:
-        if k in result:
-            _kv(k, result[k])
-            
+    showcase = [
+        ("longName",            "Company Name"),
+        ("currentPrice",        "Current Price (₹)"),
+        ("trailingPE",          "Trailing P/E"),
+        ("forwardPE",           "Forward P/E"),
+        ("marketCap",           "Market Cap"),
+        ("fiftyTwoWeekHigh",    "52W High (₹)"),
+        ("fiftyTwoWeekLow",     "52W Low (₹)"),
+        ("recommendationKey",   "Analyst Consensus"),
+        ("targetMeanPrice",     "Analyst Mean Target (₹)"),
+        ("profitMargins",       "Profit Margin"),
+        ("debtToEquity",        "Debt / Equity"),
+    ]
+    for field, label in showcase:
+        if field in result:
+            val = result[field]
+            color = Fore.GREEN if isinstance(val, (int, float)) and val > 0 else Fore.WHITE
+            _kv(label, val, value_color=color)
+
+    _info(f"Total fields returned: {len(result)}")
     assert_json_safe(result, "get_stock_info")
 
-# --- 4. STOCK HISTORY ---
 
 def test_stock_history():
-    _header("TEST 4: Stock History (WIPRO 1mo)")
+    _header("Stock History — WIPRO 1mo (daily candles)", 4)
     from tools.stock_data import get_stock_history
 
+    _section("Fetching OHLCV data…")
     result = get_stock_history("WIPRO", "NSE", "1mo", "1d")
+
     if "error" in result:
         _fail("get_stock_history", result["error"])
         return
 
-    dates = result.get("dates", [])
-    closes = result.get("close", [])
-    
-    _section("History Output")
-    _kv("Total Days", len(dates))
+    dates  = result.get("dates",  [])
+    opens  = result.get("open",   [])
+    highs  = result.get("high",   [])
+    lows   = result.get("low",    [])
+    closes = result.get("close",  [])
+    vols   = result.get("volume", [])
+
+    _kv("Candles returned", len(dates))
     if dates:
-        _kv("First Day", f"{dates[0]} | Close: {closes[0]}")
-        _kv("Last Day", f"{dates[-1]} | Close: {closes[-1]}")
-        
+        _kv("Date range", f"{dates[0]}  →  {dates[-1]}")
+
+    # Mini ASCII sparkline of closing prices
+    if closes:
+        lo, hi = min(closes), max(closes)
+        span = hi - lo or 1
+        bars = "▁▂▃▄▅▆▇█"
+        spark = "".join(bars[int((c - lo) / span * 7)] for c in closes)
+        print(f"    {Fore.MAGENTA}Close sparkline: {spark}{Style.RESET_ALL}")
+        _kv("Close range", f"₹{lo}  –  ₹{hi}", value_color=Fore.GREEN)
+
+    if dates:
+        print(f"\n    {Style.BRIGHT}{'Date':<14}{'Open':>10}{'High':>10}{'Low':>10}{'Close':>10}{'Volume':>14}{Style.RESET_ALL}")
+        _line("─")
+        for row in zip(dates[-5:], opens[-5:], highs[-5:], lows[-5:], closes[-5:], vols[-5:]):
+            d, o, h, l, c, v = row
+            print(f"    {Fore.WHITE}{d:<14}{o:>10.2f}{h:>10.2f}{l:>10.2f}{Fore.GREEN}{c:>10.2f}{Style.RESET_ALL}{Fore.CYAN}{v:>14,}{Style.RESET_ALL}")
+
     assert_json_safe(result, "get_stock_history")
 
-# --- 5. WEB SEARCH ---
 
 def test_web_search():
-    _header("TEST 5: Web Search")
+    _header("Web Search — Tavily", 5)
     from tools.web_search import search_web
 
-    query = "TCS results 2025"
-    _section(f"Input Query: '{query}'")
-    
-    result = search_web(query, max_results=2)
+    query = "TCS Q4 results 2025"
+    _section(f"Query: '{query}'")
+
+    result = search_web(query, max_results=3)
+
     if not result or (len(result) == 1 and "error" in result[0]):
         _fail("search_web", result[0].get("error", "empty response"))
         return
 
-    _section("Search Outputs")
+    _kv("Results returned", len(result))
     for i, r in enumerate(result, 1):
-        _kv(f"Result {i} Title", r.get("title", "N/A"))
-        _preview("Snippet", r.get("content", "N/A"), chars=100)
-        
+        print(f"\n    {Fore.YELLOW}{Style.BRIGHT}Result {i}{Style.RESET_ALL}")
+        _kv("Title",  r.get("title",   "N/A"), value_color=Fore.WHITE)
+        _kv("URL",    r.get("url",     "N/A"), value_color=Fore.BLUE)
+        _kv("Score",  r.get("score",   "N/A"), value_color=Fore.MAGENTA)
+        _preview("Snippet", r.get("content", ""), chars=150)
+
     assert_json_safe(result, "search_web")
 
-# --- 6. NEWS SEARCH ---
 
 def test_news_search():
-    _header("TEST 6: News Search")
+    _header("News Search — NewsAPI", 6)
     from tools.news_search import search_news
 
-    query = "Infosys"
-    _section(f"Input Query: '{query}'")
-    
+    query = "Infosys quarterly results"
+    _section(f"Query: '{query}'  (last 7 days)")
+
     result = search_news(query, days_back=7)
+
     if not result or (len(result) == 1 and "error" in result[0]):
         _fail("search_news", result[0].get("error", "empty response"))
         return
 
-    _section("News Outputs")
-    for i, a in enumerate(result[:2], 1):
-        _kv(f"Article {i} Title", a.get("title", "N/A"))
-        _kv("Source", a.get("source", "N/A"))
-        
+    _kv("Articles returned", len(result))
+    for i, a in enumerate(result[:3], 1):
+        print(f"\n    {Fore.YELLOW}{Style.BRIGHT}Article {i}{Style.RESET_ALL}")
+        _kv("Title",        a.get("title",        "N/A"))
+        _kv("Source",       a.get("source",       {}).get("name", "N/A") if isinstance(a.get("source"), dict) else a.get("source", "N/A"), value_color=Fore.CYAN)
+        _kv("Published At", a.get("publishedAt",  "N/A"), value_color=Fore.MAGENTA)
+        _preview("Description", a.get("description", ""), chars=120)
+
     assert_json_safe(result, "search_news")
 
-# --- 7. TICKER LOOKUP ---
 
 def test_ticker_lookup():
-    _header("TEST 7: Ticker Lookup")
+    _header("Ticker Lookup — INDIA_LIST.csv", 7)
     from tools.ticker_lookup import search_ticker
 
-    query = "tata steel"
-    _section(f"Input Query: '{query}'")
-    
-    results = search_ticker(query)
-    for r in results:
-        _kv("Match", f"{r.get('company_name')} | NSE: {r.get('nse_symbol')}")
+    cases = [
+        ("Exact NSE symbol",    "TCS"),
+        ("Partial name",        "hdfc"),
+        ("Full company name",   "tata steel"),
+        ("BSE code",            "500180"),
+        ("Invalid query",       "FAKECOMPANYXYZ999"),
+    ]
 
-# --- 8. DOCUMENT PARSER ---
+    for label, query in cases:
+        _section(f"{label}: '{query}'")
+        results = search_ticker(query)
+        if not results:
+            _info("No matches found.", indent=6)
+        else:
+            for r in results:
+                print(
+                    f"      {Fore.GREEN}{r.get('company_name', 'N/A'):<40}{Style.RESET_ALL}"
+                    f"  NSE: {Fore.CYAN}{r.get('nse_symbol', '-'):<12}{Style.RESET_ALL}"
+                    f"  BSE: {Fore.YELLOW}{r.get('bse_code', '-')}{Style.RESET_ALL}"
+                )
+
 
 def test_document_parser():
-    _header("TEST 8: Document Parser")
+    _header("Document Parser", 8)
     from utils.doc_parser import parse_uploaded_file
 
     test_dir = "test_files"
     if not os.path.exists(test_dir):
-        _skip(f"Directory '{test_dir}' not found.")
+        _skip(f"Directory '{test_dir}' not found. Create it and drop test files in to run this test.")
         return
 
     files = [f for f in os.listdir(test_dir) if os.path.isfile(os.path.join(test_dir, f))]
+    if not files:
+        _skip(f"No files found in '{test_dir}/'.")
+        return
+
+    _kv("Files found", len(files))
     for filename in files:
         filepath = os.path.join(test_dir, filename)
         _section(f"Parsing: {filename}")
-        
+
         result = parse_uploaded_file(filepath)
-        if result["type"] == "error":
-            _fail(filename, result["content"])
+        if result.get("type") == "error":
+            _fail(filename, result.get("content", "unknown error"))
             continue
 
-        _kv("Type Detected", result["type"])
-        
-        content = result["content"]
+        doc_type = result.get("type", "unknown")
+        _kv("Detected type", doc_type, value_color=Fore.MAGENTA)
+
+        content = result.get("content")
         if isinstance(content, str):
-            _preview("Extracted Text", content, chars=150)
+            char_count = len(content)
+            _kv("Characters extracted", f"{char_count:,}")
+            _preview("Text preview", content, chars=200)
         elif isinstance(content, dict):
             sheets = list(content.keys())
-            _kv("Sheets/Tables Found", sheets)
-            if sheets and content[sheets[0]]:
-                _kv("Row 1 Preview", content[sheets[0]][0])
-                
+            _kv("Sheets / tables", sheets)
+            for sheet in sheets[:2]:
+                rows = content[sheet]
+                _kv(f"  '{sheet}' rows", len(rows))
+                if rows:
+                    _kv("  Row 1 sample", str(rows[0])[:120])
+
         assert_json_safe(result, f"parse: {filename}")
 
-# --- 9. RAG ENGINE ---
 
 def test_rag_search():
-    _header("TEST 9: RAG Engine")
+    _header("RAG Engine — Index + Semantic Search", 9)
     from utils.doc_parser import parse_uploaded_file
     from utils.rag_engine import index_document
     from tools.document_search import search_uploaded_documents
 
     test_dir = "test_files"
-    if not os.path.exists(test_dir) or not os.listdir(test_dir):
-        _skip("No test files found for RAG.")
+    if not os.path.exists(test_dir) or not any(
+        os.path.isfile(os.path.join(test_dir, f)) for f in os.listdir(test_dir)
+    ):
+        _skip("No test files found. Add files to 'test_files/' to run this test.")
         return
 
-    _section("Indexing Documents")
+    _section("Indexing documents")
+    indexed = 0
     for filename in os.listdir(test_dir):
         filepath = os.path.join(test_dir, filename)
-        if os.path.isfile(filepath):
-            parsed = parse_uploaded_file(filepath)
-            if parsed["type"] != "error":
-                index_document(filename, parsed)
-                print(f"  Indexed: {filename}")
+        if not os.path.isfile(filepath):
+            continue
+        parsed = parse_uploaded_file(filepath)
+        if parsed.get("type") != "error":
+            index_document(filename, parsed)
+            _info(f"Indexed: {filename}")
+            indexed += 1
+    _kv("Total indexed", indexed)
 
-    query = "What activation function is used in CNNs?"
-    _section(f"Querying DB: '{query}'")
-    
-    res = search_uploaded_documents(query)
-    if res.get("status") == "success":
-        results = res.get("results", [])
-        for i, chunk in enumerate(results[:2], 1):
-            _preview(f"Match {i}", chunk, chars=200)
-    else:
-        _fail("Query Failed", res.get("message", "unknown error"))
-        
-    assert_json_safe(res, "search_uploaded_documents")
+    queries = [
+        "What is the revenue for this year?",
+        "Summarise the key risks mentioned.",
+        "What are the main findings?",
+    ]
+    for query in queries:
+        _section(f"Query: '{query}'")
+        res = search_uploaded_documents(query)
+        status = res.get("status", "unknown")
+        if status == "success":
+            results = res.get("results", [])
+            _kv("Chunks returned", len(results))
+            for i, chunk in enumerate(results[:2], 1):
+                _preview(f"Match {i}", str(chunk), chars=180)
+            _pass(f"Query returned {len(results)} result(s)")
+        elif status == "no_results":
+            _info("No matches found for this query.")
+        else:
+            _fail("Query", res.get("message", "unknown error"))
+        assert_json_safe(res, f"search_uploaded_documents: {query[:40]}")
 
-# --- 10. FORECASTING ---
 
 def test_forecasting():
-    _header("TEST 10: Chronos T5 Forecasting")
+    _header("Chronos T5 — Price Forecasting", 10)
     from tools.ts_model import predict_stock_prices
 
     symbol = "WIPRO"
     horizon = 10
-    _section(f"Input: {symbol} for {horizon} days")
-    
+    _section(f"Forecasting {symbol} for next {horizon} trading days…")
+    _info("Loading Amazon Chronos T5 Tiny model (first run may take ~30s)…")
+
     result = predict_stock_prices(symbol, "NSE", horizon_days=horizon)
 
     if "error" in result:
         _fail("predict_stock_prices", result["error"])
         return
 
-    hist_closes = result.get("historical_closes", [])
-    med = result.get("forecast_median", [])
-    
-    _section("Forecasting Output")
-    if hist_closes:
-        _kv("Last Historical Close", hist_closes[-1])
-    
-    _kv(f"Predicted Median path ({horizon} days)", med)
-    _kv("Predicted Low path", result.get("forecast_low", []))
-    _kv("Predicted High path", result.get("forecast_high", []))
+    hist   = result.get("historical_closes", [])
+    dates  = result.get("historical_dates",  [])
+    median = result.get("forecast_median",   [])
+    low    = result.get("forecast_low",      [])
+    high   = result.get("forecast_high",     [])
+
+    _kv("Historical data points", len(hist))
+    if hist and dates:
+        _kv("Historical range", f"{dates[0]}  →  {dates[-1]}")
+        _kv("Last close", f"₹{hist[-1]}", value_color=Fore.GREEN)
+
+    if median:
+        lo_f, hi_f = min(median), max(median)
+        _kv("Forecast horizon", f"{horizon} trading days")
+        _kv("Median range", f"₹{lo_f:.2f}  –  ₹{hi_f:.2f}", value_color=Fore.MAGENTA)
+
+        # Visual table: day | low | median | high
+        print(f"\n    {Style.BRIGHT}{'Day':>5}  {'Low (₹)':>10}  {'Median (₹)':>12}  {'High (₹)':>10}{Style.RESET_ALL}")
+        _line("─")
+        for i, (l, m, h) in enumerate(zip(low, median, high), 1):
+            trend = "▲" if i == 1 or m >= median[i - 2] else "▼"
+            t_color = Fore.GREEN if trend == "▲" else Fore.RED
+            print(
+                f"    {Fore.WHITE}{i:>5}{Style.RESET_ALL}  "
+                f"{Fore.YELLOW}{l:>10.2f}{Style.RESET_ALL}  "
+                f"{t_color}{m:>12.2f} {trend}{Style.RESET_ALL}  "
+                f"{Fore.CYAN}{h:>10.2f}{Style.RESET_ALL}"
+            )
+
+    note = result.get("note", "")
+    if note:
+        print(f"\n    {Fore.YELLOW}⚠  {Style.DIM}{note[:120]}{'…' if len(note) > 120 else ''}{Style.RESET_ALL}")
 
     assert_json_safe(result, "predict_stock_prices")
 
-# --- RUNNER ---
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FINAL SUMMARY TABLE
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _print_summary():
+    print(f"\n\n{Fore.CYAN}{Style.BRIGHT}{'═' * W}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{Style.BRIGHT}{'  RESULTS SUMMARY  '.center(W)}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{Style.BRIGHT}{'═' * W}{Style.RESET_ALL}")
+
+    print(f"  {Style.BRIGHT}{'Test':<40}{'Status':^10}{'Duration':>10}{Style.RESET_ALL}")
+    _line()
+
+    passed = failed = errors = 0
+    for r in _results:
+        status = r["status"]
+        dur    = f"{r['duration']:.2f}s"
+        if status == "PASS":
+            status_str = f"{Fore.GREEN}{Style.BRIGHT} PASS {Style.RESET_ALL}"
+            passed += 1
+        elif status == "FAIL":
+            status_str = f"{Fore.RED}{Style.BRIGHT} FAIL {Style.RESET_ALL}"
+            failed += 1
+        else:
+            status_str = f"{Fore.RED}{Style.BRIGHT} ERR  {Style.RESET_ALL}"
+            errors += 1
+
+        name_col = r["name"][:38]
+        print(f"  {Fore.WHITE}{name_col:<40}{Style.RESET_ALL}{status_str:^10}{Fore.CYAN}{dur:>10}{Style.RESET_ALL}")
+        if r["reason"]:
+            _info(f"↳ {r['reason'][:76]}", indent=4)
+
+    _line()
+    total = len(_results)
+    skipped = total - passed - failed - errors
+    summary_color = Fore.GREEN if (failed + errors) == 0 else Fore.RED
+    print(
+        f"\n  {summary_color}{Style.BRIGHT}"
+        f"{passed} passed{Style.RESET_ALL}  "
+        f"{Fore.RED}{failed + errors} failed{Style.RESET_ALL}  "
+        f"{Fore.YELLOW}{skipped} skipped{Style.RESET_ALL}  "
+        f"{Style.DIM}({total} total){Style.RESET_ALL}"
+    )
+    total_time = sum(r["duration"] for r in _results)
+    print(f"  {Style.DIM}Total time: {total_time:.2f}s{Style.RESET_ALL}\n")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENTRY POINT
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    _header("Shree - Tool Test Suite")
+    print(f"\n{Fore.CYAN}{Style.BRIGHT}{'═' * W}")
+    print("  SHREE — Tool Test Suite".center(W))
+    print(f"{'═' * W}{Style.RESET_ALL}")
 
-    test_functions = [
-        test_session_store,
-        test_formatters,
-        test_stock_info,
-        test_stock_history,
-        test_web_search,
-        test_news_search,
-        test_ticker_lookup,
-        test_document_parser,
-        test_rag_search,
-        test_forecasting,
+    suite = [
+        ("Session Store",                test_session_store),
+        ("Formatters",                   test_formatters),
+        ("Stock Info",                   test_stock_info),
+        ("Stock History",                test_stock_history),
+        ("Web Search",                   test_web_search),
+        ("News Search",                  test_news_search),
+        ("Ticker Lookup",                test_ticker_lookup),
+        ("Document Parser",              test_document_parser),
+        ("RAG Engine",                   test_rag_search),
+        ("Chronos Forecasting",          test_forecasting),
     ]
 
-    passed, failed = 0, 0
-    for test_fn in test_functions:
-        try:
-            test_fn()
-            passed += 1
-        except AssertionError as e:
-            print(f"\n  [FAIL] {test_fn.__name__}: {e}")
-            failed += 1
-        except Exception as e:
-            print(f"\n  [ERROR] {test_fn.__name__}: {type(e).__name__}: {e}")
-            failed += 1
+    for name, fn in suite:
+        _run(name, fn)
 
-    _line("=")
-    print(f"Results: {passed} tests completed | {failed} failed")
-    _line("=")
+    _print_summary()

@@ -68,7 +68,9 @@ def _load_listings() -> None:
             _lookup_table[bse_code] = entry
 
     # 9: Initialization message
-    print(f"Loaded {len(_lookup_table)} lookup keys from INDIA_LIST.")
+    # print(f"Loaded {len(_lookup_table)} lookup keys from INDIA_LIST.")
+    import sys
+    print(f"Loaded {len(_lookup_table)} lookup keys from INDIA_LIST.", file=sys.stderr)
 
 
 def search_ticker(query: str) -> list[dict]:

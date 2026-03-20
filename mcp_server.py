@@ -1,15 +1,22 @@
 """
 mcp_server.py — Artha MCP Tool Server (FastMCP)
 
-Exposes all financial tools over the MCP stdio protocol.
-Can be connected to by any MCP-compatible client.
+Single source of truth for all tool definitions.
+Both the LangChain agent (via MultiServerMCPClient) and any external
+MCP-compatible client connect here to discover and call tools.
 
-Design: the real functions in tools/ stay plain Python.
-This file creates thin wrapper functions with descriptive docstrings
-and registers them with FastMCP — same pattern as agent.py's @tool wrappers.
-This keeps tools/ free of any framework dependency.
+Architecture:
+  tools/          -> plain Python functions, no framework dependency
+  mcp_server.py   -> FastMCP wrappers (this file) — only place tools are defined
+  agent.py        -> fetches tools from here, defines none itself
+
+All wrapper functions follow the same pattern:
+  - Descriptive docstring (this is what the LLM reads to decide when to call it)
+  - One-line body calling the real function from tools/
+  - No logic of its own beyond routing and the document tools which need session_store
 
 Run: python mcp_server.py
+Launched automatically as subprocess by agent.py via MultiServerMCPClient.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -30,6 +37,7 @@ from tools.ticker_lookup import search_ticker
 from tools.ts_model import predict_stock_prices
 from utils.doc_parser import parse_uploaded_file
 from utils.rag_engine import query_documents
+from utils.session_store import get_files
 
 
 mcp = FastMCP("artha-tools")
@@ -60,7 +68,7 @@ def get_stock_history_tool(symbol: str, exchange: str = "NSE", period: str = "1m
 @mcp.tool()
 def get_financials_tool(symbol: str, exchange: str = "NSE", statement: str = "income", quarterly: bool = False) -> dict:
     """Get financial statements: income statement, balance sheet, or cash flow.
-    statement: 'income', 'balance_sheet', or 'cashflow'.
+    statement: 'income' for P&L, 'balance_sheet' for assets/liabilities, 'cashflow' for cash flows.
     quarterly: True for last 4 quarters, False for last 4 annual periods."""
     return get_financials(symbol, exchange, statement, quarterly)
 
@@ -74,7 +82,7 @@ def get_corporate_actions_tool(symbol: str, exchange: str = "NSE") -> dict:
 
 @mcp.tool()
 def get_analyst_data_tool(symbol: str, exchange: str = "NSE") -> dict:
-    """Get analyst consensus: price targets and buy/hold/sell recommendation counts.
+    """Get analyst consensus: price targets (mean/high/low) and buy/hold/sell counts.
     Call when the user asks what analysts think about a stock."""
     return get_analyst_data(symbol, exchange)
 
@@ -134,33 +142,39 @@ def search_ticker_tool(query: str) -> dict:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DOCUMENT TOOLS
-# These take filepath/filepaths directly since MCP server runs as a subprocess
-# and cannot access the parent process's session_store.
-# The agent passes the filepath from the system note injected into each message.
+# session_store is accessible here because MultiServerMCPClient runs
+# mcp_server.py in-process (not as a detached subprocess), so it shares
+# the same memory as agent.py and test_run.py.
 # ─────────────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def parse_document_tool(filepath: str) -> dict:
-    """Parse an uploaded document and return its full extractable content.
-    Supports PDF, DOCX, Excel, CSV, TXT, PPT.
-    Call for broad questions like 'summarise this file'.
-    filepath: absolute path to the file on disk (from the system note in the message)."""
-    if not filepath:
-        return {"error": "No filepath provided."}
-    return parse_uploaded_file(filepath)
+def parse_document_tool(session_id: str) -> dict:
+    """Parse all uploaded documents in the session and return their full content.
+    Call for broad questions like 'summarise this file' or 'what is this document about'.
+    session_id: provided in the system note at the end of the user message."""
+    files = get_files(session_id)
+    if not files:
+        return {"error": "No documents uploaded in this session."}
+    results = []
+    for f in files:
+        parsed = parse_uploaded_file(f["filepath"])
+        parsed["filename"] = f["filename"]
+        results.append(parsed)
+    return {"documents": results}
 
 
 @mcp.tool()
-def search_documents_tool(filepaths: str, query: str, top_k: int = 5) -> dict:
+def search_documents_tool(session_id: str, query: str, top_k: int = 5) -> dict:
     """Semantically search across uploaded documents for a specific answer.
-    Prefer over parse_document_tool for specific questions.
-    filepaths: comma-separated absolute paths (from the system note in the message).
+    Prefer over parse_document_tool for specific questions like 'what was revenue in FY24?'.
+    session_id: provided in the system note at the end of the user message.
     query: natural-language question to search for.
-    top_k: number of most relevant passages to return."""
-    if not filepaths:
-        return {"error": "No filepaths provided."}
-    path_list = [p.strip() for p in filepaths.split(",") if p.strip()]
-    return query_documents(path_list, query, top_k)
+    top_k: number of most relevant passages to return. Default 5."""
+    files = get_files(session_id)
+    if not files:
+        return {"error": "No documents uploaded in this session."}
+    filepaths = [f["filepath"] for f in files]
+    return query_documents(filepaths, query, top_k)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -178,6 +192,9 @@ def predict_stock_tool(symbol: str, exchange: str = "NSE", horizon_days: int = 1
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ENTRY POINT
+# When run as a standalone subprocess (e.g. for external MCP clients),
+# serves over stdio. When imported by MultiServerMCPClient, this block
+# is not executed — the client calls the tools directly.
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

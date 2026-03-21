@@ -58,11 +58,17 @@ artha_backend/
 │   ├── sqlite3.py           # SQLite3 experiments for local DB testing.
 │   └── yfinance.py          # yfinance tutorial: data fetching, TA, FA.
 │
-├── logs/                    # Per-session Markdown transcripts from test_run.py.
 │
 ├── models/
 │   ├── __init__.py
 │   └── schemas.py           # Pydantic request/response models for FastAPI.
+│
+├── tools/                   # Plain Python functions. No framework dependency.
+│   ├── logs
+│   ├── files
+│   └── scripts.py
+│       ├── test_run.py      # Runs the Agent UI in Termnial Mode.
+│       └── test_tools.py    # Tests the working of tools.
 │
 ├── tools/                   # Plain Python functions. No framework dependency.
 │   ├── __init__.py

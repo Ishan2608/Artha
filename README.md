@@ -81,7 +81,13 @@ SESSION_TTL_SECONDS=3600
 ### Terminal chat (no frontend needed)
 
 ```bash
-python test_run.py
+python tests/scripts/test_run.py
+```
+
+### Test Only Tools
+
+```bash
+python tests/scripts/test_tools.py
 ```
 
 Starts an interactive terminal session. Supports file uploads, context injection, and full multi-turn conversation. Session transcripts are saved to `logs/`.
@@ -128,6 +134,7 @@ artha_backend/
 ├── .env               # Your API keys — never commit
 ├── .env.example
 │
+├── tests/             # Testing scripts, files and logs.
 ├── tools/             # Plain Python functions (no framework)
 ├── utils/             # Formatters, session store, doc parser, RAG engine
 ├── models/            # Pydantic schemas

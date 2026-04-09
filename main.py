@@ -45,10 +45,10 @@ from agent import run_agent
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Artha Backend",
+    title="Shree Backend",
     description=(
         "AI Financial Analyst API for Indian retail investors. "
-        "Powered by LangGraph + Groq (Llama 3.3 70B) + direct tool binding."
+        "Powered by LangGraph + Gemini and Groq (Llama 3.3 70B) + direct tool binding."
     ),
     version="1.0.0",
 )

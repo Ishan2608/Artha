@@ -470,7 +470,7 @@ async def run_agent(session_id: str, message: str) -> dict:
         else:
             final_text = str(content)
 
-    data       = _extract_data_block(final_text)
+    data = _extract_data_block(final_text)
     clean_text = _strip_data_block(final_text)
     return {"text": clean_text, "data": data}
 

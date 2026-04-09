@@ -73,7 +73,6 @@ def get_stock_history(symbol: str, exchange: str = "NSE", period: str = "1mo", i
         All numeric lists are rounded to 2 decimal places.
         If no data is found, returns {"error": "No data found", "ticker": symbol}.
     """
-    # TODO: ticker = _build_ticker(symbol, exchange)
     ticker = _build_ticker(symbol, exchange)
     df = ticker.history(period = period, interval = interval)
     if df.empty:

@@ -20,6 +20,11 @@ Two Approaches:
   - Aggregator tool to fetch and summarize data from internet, news, and files.
 ---
 
+## Sample Output
+
+![Test Run - Query](./docs/outputs/1.png)
+![Test Run - Result](./docs/outputs/2.png)
+
 ## Stack
 
 | Aspect | Tool/Source |

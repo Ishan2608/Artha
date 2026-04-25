@@ -22,8 +22,8 @@ Two Approaches:
 
 ## Sample Output
 
-![Test Run - Query](./docs/outputs/1.png)
-![Test Run - Result](./docs/outputs/2.png)
+![Test Run - Query](./docs/outputs/1.PNG)
+![Test Run - Result](./docs/outputs/2.PNG)
 
 ## Stack
 

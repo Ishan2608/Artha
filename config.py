@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     SESSION_TTL_SECONDS: int = 3600
 
+    # Authentication and Database.
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_HOURS: int
+    DATABASE_URL: str = "sqlite:///./artha.db"
+
 
 # Instantiate settings as a module-level singleton.
 # Every other file imports this 'settings' object — never re-instantiate it.

@@ -1,97 +1,205 @@
-from typing import Any
-from collections import defaultdict
+"""
+utils/session_store.py — Persistent, DB-backed session store
 
-docs = """
-Structure of Conversation Histories is a simple Python Dictionary of Dictionaries.
-Highest Level of Key: session_id. For each 'chat', we have a different session_id to identify it.
-For each session, we have its history and its files. Thus two keys for dict in it.
-Each entry in 'history', is a dict with these keys -> role, contet.
-Each entry in 'files', is a dict with these keys -> file_id, filepath, filename
-{
-    `session_id`: {
-        `history`: [
-            {
-            `role`: `user` | `assistant` | `system`,
-            `content`: str
-            },
-        ],
-        `files`: [
-            { `file_id`: str, `filepath`: str, `filename`:str },
-        ]
-    }
-}
+Drop-in replacement for the original in-memory session_store.
+The public API is identical so agent.py and multi_agent.py require zero changes.
+
+session_id is now str(user.id) — set by main.py after authentication.
+
+Public API
+----------
+get_history(session_id)
+    Returns list of {"role": str, "content": str} dicts in chronological order.
+    `content` is the enriched version (with system notes) fed to the agent.
+
+append_message(session_id, role, content, display_content=None)
+    Persists a message.  display_content defaults to content when omitted
+    (correct for "assistant" and "system" roles).
+
+add_file(session_id, file_id, filepath, filename)
+    Records an uploaded file for the session.
+
+get_files(session_id)
+    Returns list of {"file_id", "filepath", "filename"} dicts.
+
+clear_session(session_id)
+    Deletes all messages and file records for the session (does NOT delete
+    the files from disk — that's the caller's responsibility).
+
+get_display_history(session_id)
+    Like get_history() but returns display_content + created_at timestamp.
+    Used by GET /chat/history to return clean conversation to the frontend.
 """
 
-def default_session() -> dict[str, Any]:
-    return {"history": [], "files": []}
+from db import SessionLocal
+from models.db_models import Message, UploadedFile
 
-_store: dict[str, dict[str, Any]] = defaultdict(default_session)
 
-def get_session(session_id: str) -> dict[str, Any]:
-    """
-    Retrieve the full session dict for a given session_id.
-    If the session does not exist, the defaultdict creates an empty one automatically.
-    Args:
-        session_id: The unique identifier from the frontend request.
-    Returns:
-        Dict with keys "history" and "files".
-    """
-    return _store[session_id]
+# ---------------------------------------------------------------------------
+# Internal helper
+# ---------------------------------------------------------------------------
 
+def _user_id(session_id: str) -> int:
+    """Convert session_id string to int user_id."""
+    return int(session_id)
+
+
+# ---------------------------------------------------------------------------
+# History (agent memory)
+# ---------------------------------------------------------------------------
 
 def get_history(session_id: str) -> list[dict]:
     """
-    Return the message history list for a session.
-    Args:
-        session_id: Target session.
-    Returns:
-        List of message dicts in chronological order.
+    Return all messages for the session in chronological order.
+    Each dict: {"role": str, "content": str}
+
+    `content` is the enriched text (includes [System note: session_id=...])
+    so the agent always has context about which session it's operating in.
     """
-    return _store[session_id]["history"]
+    uid = _user_id(session_id)
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Message)
+            .filter(Message.user_id == uid)
+            .order_by(Message.id)
+            .all()
+        )
+        return [{"role": r.role, "content": r.content} for r in rows]
+    finally:
+        db.close()
 
 
-def append_message(session_id: str, role: str, content: str) -> None:
+def append_message(
+    session_id: str,
+    role: str,
+    content: str,
+    display_content: str | None = None,
+) -> None:
     """
-    Append a single message to a session's history.
-    Args:
-        session_id: Target session.
-        role: One of "user", "assistant", or "system".
-        content: The text content of the message.
+    Persist a single message to the database.
+
+    Parameters
+    ----------
+    session_id      : str(user.id)
+    role            : "user" | "assistant" | "system"
+    content         : Full text (may include session/file hints for the agent).
+    display_content : Clean text shown to the user.
+                      Defaults to `content` when omitted (correct for assistant/system).
     """
-    message = {"role": role, "content": content}
-    _store[session_id]["history"].append(message)
-    return
+    uid = _user_id(session_id)
+    db = SessionLocal()
+    try:
+        msg = Message(
+            user_id=uid,
+            role=role,
+            content=content,
+            display_content=display_content if display_content is not None else content,
+        )
+        db.add(msg)
+        db.commit()
+    finally:
+        db.close()
 
 
-def add_file(session_id: str, file_id: str, filepath: str, filename: str) -> None:
+def get_display_history(session_id: str) -> list[dict]:
     """
-    Register an uploaded file in the session so the agent can reference it later.
-    Args:
-        session_id: Target session.
-        file_id: UUID string assigned at upload time.
-        filepath: Absolute path to the saved file on disk.
-        filename: Original filename as provided by the user.
+    Return conversation history formatted for frontend display.
+
+    Each dict: {"role": str, "content": str, "created_at": str (ISO-8601)}
+
+    Uses display_content (clean user text) rather than the enriched agent content.
+    System-role messages (injected context) are excluded — they are internal.
     """
-    fileMessage = {"file_id": file_id, "filepath": filepath, "filename": filename}
-    _store[session_id]["files"].append(fileMessage)
+    uid = _user_id(session_id)
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Message)
+            .filter(Message.user_id == uid, Message.role != "system")
+            .order_by(Message.id)
+            .all()
+        )
+        return [
+            {
+                "role": r.role,
+                "content": r.display_content,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# File tracking
+# ---------------------------------------------------------------------------
+
+def add_file(
+    session_id: str,
+    file_id: str,
+    filepath: str,
+    filename: str,
+) -> None:
+    """Record an uploaded file for the given session."""
+    uid = _user_id(session_id)
+    db = SessionLocal()
+    try:
+        record = UploadedFile(
+            user_id=uid,
+            file_id=file_id,
+            filepath=filepath,
+            filename=filename,
+        )
+        db.add(record)
+        db.commit()
+    finally:
+        db.close()
 
 
 def get_files(session_id: str) -> list[dict]:
     """
-    Return the list of files registered for a session.
-    Args:
-        session_id: Target session.
-    Returns:
-        List of file metadata dicts. Each dict has file_id, filepath, filename.
+    Return all files uploaded in the session.
+    Each dict: {"file_id": str, "filepath": str, "filename": str}
     """
-    return _store[session_id]["files"]
+    uid = _user_id(session_id)
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(UploadedFile)
+            .filter(UploadedFile.user_id == uid)
+            .all()
+        )
+        return [
+            {
+                "file_id": r.file_id,
+                "filepath": r.filepath,
+                "filename": r.filename,
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
 
+
+# ---------------------------------------------------------------------------
+# Session cleanup
+# ---------------------------------------------------------------------------
 
 def clear_session(session_id: str) -> None:
     """
-    Delete a session and all its data from the in-memory store.
-    Does NOT delete uploaded files from disk — the caller (main.py route) handles that.
-    Args:
-        session_id: The session to destroy.
+    Delete all messages and file records for the session from the database.
+
+    IMPORTANT: This does NOT delete files from disk.
+    The caller (main.py delete_session route) must delete disk files first,
+    because this function removes the filepath metadata needed to find them.
     """
-    del _store[session_id]
+    uid = _user_id(session_id)
+    db = SessionLocal()
+    try:
+        db.query(Message).filter(Message.user_id == uid).delete()
+        db.query(UploadedFile).filter(UploadedFile.user_id == uid).delete()
+        db.commit()
+    finally:
+        db.close()

@@ -12,9 +12,9 @@ Commands
   /upload   Upload a file (Tkinter picker or manual path)
   /context  Paste multi-line text context into the session
   /files    List uploaded files this session
+  /history  Print your saved conversation history from the DB
   /clear    Reset session (clears files + history)
-  /new      Start a brand-new session
-  /session  Show current session ID
+  /session  Show current session info
   /help     Show this help
   /quit     Exit
 """
@@ -55,7 +55,6 @@ except ImportError:
     _HAS_COLOR = False
 
 # ── Theme: Neon Dusk ─────────────────────────────────────────────────────────
-# Dark gray terminal. Light, comfortable, colorful.
 TEAL       = Style.BRIGHT + Fore.CYAN
 SOFT_TEAL  = Fore.CYAN
 DIM_TEAL   = Style.DIM   + Fore.CYAN
@@ -124,16 +123,16 @@ def _box(lines: list[str], title: str = "", color=None):
 
 # ── Components ────────────────────────────────────────────────────────────────
 
-def _banner(session_id: str):
-    log_rel = os.path.join("tests", "logs", f"session_{session_id[:20]}.md")
+def _banner(username: str, session_id: str):
+    log_rel = os.path.join("tests", "logs", f"session_{username}.md")
     _blank()
     _thick()
-    # Logo row
     print(f"  {_c(BG_ARTHA, '  ⬡  ARTHA  ')}  {_c(WHITE, 'AI Financial Analyst')}  "
           f"{_c(MUTED, '· Indian markets · Stocks · Forecasts · Docs')}")
     _thin()
-    print(f"  {_c(CORAL, 'Session')}  {_c(SOFT_PINK, '·')}  {_c(WHITE, session_id)}")
-    print(f"  {_c(CORAL, 'Log    ')}  {_c(SOFT_PINK, '·')}  {_c(MUTED,  log_rel)}")
+    print(f"  {_c(CORAL, 'User   ')}  {_c(SOFT_PINK, '·')}  {_c(WHITE, username)}")
+    print(f"  {_c(CORAL, 'Session')}  {_c(SOFT_PINK, '·')}  {_c(MUTED, session_id)}")
+    print(f"  {_c(CORAL, 'Log    ')}  {_c(SOFT_PINK, '·')}  {_c(MUTED, log_rel)}")
     _thick()
     _blank()
 
@@ -143,9 +142,9 @@ def _print_help():
         ("/upload",   "Upload a file  (PDF · DOCX · XLSX · CSV · TXT · PPT)"),
         ("/context",  "Inject plain-text context or instructions"),
         ("/files",    "List uploaded files in this session"),
+        ("/history",  "Print your saved conversation history from the DB"),
         ("/clear",    "Clear session  (history + files)"),
-        ("/new",      "Start a brand-new session"),
-        ("/session",  "Show current session ID"),
+        ("/session",  "Show current session info"),
         ("/help",     "Show this help"),
         ("/quit",     "Exit"),
     ]
@@ -195,7 +194,6 @@ def _print_user(text: str):
 def _print_agent(text: str, data: dict | None, logger: "SessionLogger"):
     logger.log_agent(text, data)
     _blank()
-    # Header
     header = _c(TEAL, "┌") + _c(TEAL, "─ ") + _c(BG_ARTHA, "  Artha  ") + \
              _c(TEAL, " " + "─" * (W - 14) + "┐")
     footer = _c(TEAL, "└" + "─" * (W - 2) + "┘")
@@ -244,7 +242,6 @@ def _print_data_card(data: dict):
     else:
         rows = [(str(k), str(v)[:60]) for k, v in list(data.items())[:6]]
 
-    # Compact two-column card
     W2     = W - 4
     col1_w = min(max(len(r[0]) for r in rows) + 1, W2 // 3)
     col2_w = W2 - col1_w - 3
@@ -271,12 +268,12 @@ def _print_data_card(data: dict):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class SessionLogger:
-    def __init__(self, session_id: str):
+    def __init__(self, username: str):
         os.makedirs(_LOGS_DIR, exist_ok=True)
-        fname     = f"session_{session_id[:40]}.md"
+        fname     = f"session_{username}.md"
         self.path = os.path.join(_LOGS_DIR, fname)
         self._write(
-            f"# Artha Session — {session_id}\n\n"
+            f"# Artha Session — {username}\n\n"
             f"**Started:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n---\n"
         )
 
@@ -313,10 +310,20 @@ def _import_project():
         from utils.session_store import (
             append_message, get_history,
             add_file, get_files, clear_session,
+            get_display_history,
         )
+        from auth import hash_password, verify_password
+        from db import SessionLocal, init_db
+        from models.db_models import User
         from config import settings
-        return run_agent, append_message, get_history, add_file, get_files, \
-               clear_session, settings
+        return (
+            run_agent,
+            append_message, get_history, get_display_history,
+            add_file, get_files, clear_session,
+            hash_password, verify_password,
+            SessionLocal, init_db, User,
+            settings,
+        )
     except ImportError as e:
         _err(f"Import error: {e}")
         _err("Activate your venv and ensure .env has API keys.")
@@ -346,6 +353,107 @@ def _pick_file_tkinter() -> str | None:
         return path or None
     except Exception:
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH SCREEN  — shown once before the chat loop
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _auth_screen(hash_password, verify_password, SessionLocal, init_db, User):
+    """
+    Interactive login / register screen.
+    Returns (user_id: int, username: str) on success, or calls sys.exit().
+
+    Imports are passed in (already resolved by _import_project) to avoid
+    re-importing at module level before the path bootstrap is done.
+    """
+    init_db()   # ensure tables exist before we try to query them
+
+    _blank()
+    _thick()
+    print(f"  {_c(BG_ARTHA, '  ⬡  ARTHA  ')}  {_c(WHITE, 'AI Financial Analyst')}")
+    _thin()
+    print(f"  {_c(MUTED, 'Your conversation is saved and restored on every login.')}")
+    _thick()
+    _blank()
+
+    while True:
+        _box([
+            _c(CORAL, "  1") + "  " + _c(WHITE,  "Login"),
+            _c(CORAL, "  2") + "  " + _c(WHITE,  "Register"),
+            _c(MUTED, "  0") + "  " + _c(MUTED,  "Exit"),
+        ], title="Welcome", color=SOFT_TEAL)
+
+        choice = input(_c(CORAL, "  Choice: ")).strip()
+
+        if choice == "0":
+            print()
+            sys.exit(0)
+
+        elif choice == "1":
+            # ── LOGIN ──────────────────────────────────────────────────────────
+            _blank()
+            email    = input(_c(CORAL, "  Email   : ")).strip()
+            password = input(_c(CORAL, "  Password: ")).strip()
+
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(
+                    User.email == email,
+                    User.is_active == True,
+                ).first()
+            finally:
+                db.close()
+
+            if not user or not verify_password(password, user.hashed_password):
+                _blank()
+                _err("Incorrect email or password. Try again.")
+                _blank()
+                continue
+
+            _blank()
+            _ok(f"Welcome back, {user.username}!")
+            return user.id, user.username
+
+        elif choice == "2":
+            # ── REGISTER ───────────────────────────────────────────────────────
+            _blank()
+            username = input(_c(CORAL, "  Username: ")).strip()
+            email    = input(_c(CORAL, "  Email   : ")).strip()
+            password = input(_c(CORAL, "  Password: ")).strip()
+
+            if len(username) < 3:
+                _err("Username must be at least 3 characters."); _blank(); continue
+            if len(password) < 8:
+                _err("Password must be at least 8 characters."); _blank(); continue
+
+            db = SessionLocal()
+            try:
+                if db.query(User).filter(User.email == email).first():
+                    _err("That email is already registered."); _blank(); continue
+                if db.query(User).filter(User.username == username).first():
+                    _err("That username is taken."); _blank(); continue
+
+                new_user = User(
+                    username=username,
+                    email=email,
+                    hashed_password=hash_password(password),
+                )
+                db.add(new_user)
+                db.commit()
+                db.refresh(new_user)
+                user_id = new_user.id
+                uname   = new_user.username
+            finally:
+                db.close()
+
+            _blank()
+            _ok(f"Account created! Welcome, {uname}.")
+            return user_id, uname
+
+        else:
+            _err("Invalid choice. Enter 1, 2, or 0.")
+            _blank()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -415,6 +523,7 @@ def cmd_context(session_id: str, append_message_fn, logger: SessionLogger):
     if not lines:
         _info("No context provided."); return
     text = "\n".join(lines)
+    # display_content defaults to content for system messages — that's correct.
     append_message_fn(session_id, "system", f"[User-provided context]:\n{text}")
     logger.log_event(f"Context injected ({len(text)} chars)")
     _ok(f"Context added  ({len(text):,} characters)")
@@ -434,6 +543,31 @@ def cmd_files(session_id: str, get_files_fn):
             + exists
         )
     _box(lines, title="Uploaded Files", color=SOFT_LIME)
+
+
+def cmd_history(session_id: str, get_display_history_fn):
+    """Print the full saved conversation history from the DB."""
+    messages = get_display_history_fn(session_id)
+    if not messages:
+        _info("No conversation history yet."); return
+    _blank()
+    _thick()
+    print(f"  {_c(WHITE, 'Conversation History')}  {_c(MUTED, f'({len(messages)} messages)')}")
+    _thick()
+    for m in messages:
+        ts   = m["created_at"][:19].replace("T", " ")   # ISO → readable
+        role = m["role"]
+        body = m["content"]
+        if role == "user":
+            badge = _c(BG_USER, "  You  ")
+        else:
+            badge = _c(BG_ARTHA, "  Artha  ")
+        _blank()
+        print(f"  {badge}  {_c(MUTED, ts)}")
+        for line in textwrap.wrap(body, width=W - 4) or [""]:
+            print(f"    {_c(WHITE, line)}")
+    _blank()
+    _thick()
 
 
 def cmd_clear(session_id: str, get_files_fn, clear_session_fn, logger: SessionLogger):
@@ -457,15 +591,32 @@ def cmd_clear(session_id: str, get_files_fn, clear_session_fn, logger: SessionLo
 
 async def _chat_loop():
     (
-        run_agent, append_message, get_history,
-        add_file, get_files, clear_session, settings
+        run_agent,
+        append_message, get_history, get_display_history,
+        add_file, get_files, clear_session,
+        hash_password, verify_password,
+        SessionLocal, init_db, User,
+        settings,
     ) = _import_project()
 
-    session_id = f"cli_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    logger     = SessionLogger(session_id)
+    # ── Auth: must happen before chat loop ────────────────────────────────────
+    user_id, username = _auth_screen(
+        hash_password, verify_password, SessionLocal, init_db, User
+    )
+    session_id = str(user_id)   # this IS the session_id throughout the agent system
+    logger     = SessionLogger(username)
 
-    _banner(session_id)
+    _banner(username, session_id)
     _print_help()
+
+    # Show how many messages are already saved for this user.
+    prior = get_display_history(session_id)
+    if prior:
+        _info(f"Resuming your conversation — {len(prior)} message(s) already saved.")
+        _info("Type /history to review them.")
+    else:
+        _info("This is a fresh conversation. Say hi to Artha!")
+    _blank()
 
     try:
         while True:
@@ -489,11 +640,15 @@ async def _chat_loop():
                 _print_help()
 
             elif cmd == "/session":
-                _info(f"Session ID : {session_id}")
-                _info(f"Log file   : {os.path.relpath(logger.path)}")
+                _info(f"User      : {username}")
+                _info(f"Session ID: {session_id}  (= your user ID)")
+                _info(f"Log file  : {os.path.relpath(logger.path)}")
 
             elif cmd == "/files":
                 cmd_files(session_id, get_files)
+
+            elif cmd == "/history":
+                cmd_history(session_id, get_display_history)
 
             elif cmd == "/upload":
                 cmd_upload(session_id, add_file, settings, logger)
@@ -504,17 +659,6 @@ async def _chat_loop():
             elif cmd == "/clear":
                 cmd_clear(session_id, get_files, clear_session, logger)
 
-            elif cmd == "/new":
-                confirm = input(_c(ERR_FG, "  Start a new session? (y/N): ")).strip().lower()
-                if confirm == "y":
-                    cmd_clear(session_id, get_files, clear_session, logger)
-                    logger.close()
-                    session_id = f"cli_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                    logger     = SessionLogger(session_id)
-                    _blank()
-                    _ok(f"New session started: {session_id}")
-                    _info(f"Log → {os.path.relpath(logger.path)}")
-
             elif cmd.startswith("/"):
                 _err(f"Unknown command '{user_input}'. Type /help.")
 
@@ -522,9 +666,8 @@ async def _chat_loop():
             else:
                 files = get_files(session_id)
 
-                # Build the enriched message that carries session_id to doc tools.
-                # This same enriched form is stored in history so follow-up turns
-                # retain the session context without the user having to repeat it.
+                # Build the enriched message so document tools always have
+                # the session_id, even on follow-up turns after page refresh.
                 if files:
                     file_names = ", ".join(f["filename"] for f in files)
                     enriched = (
@@ -548,10 +691,12 @@ async def _chat_loop():
                 try:
                     result = await run_agent(session_id, enriched)
 
-                    # Append ENRICHED message to history (not the raw input).
-                    # This ensures session_id context persists on follow-up turns
-                    # about the same documents without the user repeating themselves.
-                    append_message(session_id, "user",      enriched)
+                    # Store enriched text for agent memory, clean text for display.
+                    append_message(
+                        session_id, "user",
+                        content=enriched,
+                        display_content=user_input,   # what /history shows
+                    )
                     append_message(session_id, "assistant", result["text"])
 
                     _print_agent(result["text"], result.get("data"), logger)

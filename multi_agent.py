@@ -380,20 +380,20 @@ def _build_agents() -> None:
 
     # ── Specialist LLMs ──────────────────────────────────────────────────────
     gemini_analysis_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
+        model="gemini-3.1-flash-lite-preview",
         google_api_key=settings.GEMINI_API_KEY_ANALYSIS,
         temperature=0.1,
     )
     gemini_aggregator_llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite",
+        model="gemini-3.1-flash-lite-preview",
         google_api_key=settings.GEMINI_API_KEY_AGGREGATOR,
         temperature=0.1,
     )
 
     # ── Orchestrator LLM ─────────────────────────────────────────────────────
-    groq_llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
-        api_key=settings.GROQ_API_KEY,
+    groq_llm = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite-preview",
+        api_key=settings.GEMINI_API_KEY_AGGREGATOR,
         temperature=0.1,
     )
 

@@ -77,7 +77,7 @@ from utils.session_store import (
     clear_session,
     get_display_history,
 )
-from agent import run_agent
+from multi_agent import run_agent
 
 
 # ─────────────────────────────────────────────────────────────────────────────

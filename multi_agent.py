@@ -391,9 +391,9 @@ def _build_agents() -> None:
     )
 
     # ── Orchestrator LLM ─────────────────────────────────────────────────────
-    groq_llm = ChatGoogleGenerativeAI(
-        model="gemini-3.1-flash-lite-preview",
-        api_key=settings.GEMINI_API_KEY_AGGREGATOR,
+    groq_llm = ChatGroq(
+        model="llama-3.3-70b-versatile",
+        api_key=settings.GROQ_API_KEY,
         temperature=0.1,
     )
 

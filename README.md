@@ -24,6 +24,7 @@ Two Approaches:
 
 ![Test Run - Query](./docs/outputs/1.PNG)
 ![Test Run - Result](./docs/outputs/2.PNG)
+![UI - Auth Page](./docs/outputs/3.PNG)
 
 ## Stack
 

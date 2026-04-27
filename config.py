@@ -11,17 +11,10 @@ class Settings(BaseSettings):
         from config import settings
         print(settings.GEMINI_API_KEY)
     """
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
     # Single Agent System.
     GEMINI_API_KEY: str
-
-    # Multi Agent System.
-    GEMINI_API_KEY_ANALYSIS: str
-    GEMINI_API_KEY_AGGREGATOR: str
-
-    # Single and Mulit-Agent System.
-    GROQ_API_KEY: str
 
     # Tools API Keys
     TAVILY_API_KEY: str
@@ -30,6 +23,15 @@ class Settings(BaseSettings):
     # System Settings.
     UPLOAD_DIR: str = "uploads"
     SESSION_TTL_SECONDS: int = 3600
+
+    # System Settings.
+    UPLOAD_DIR: str = "uploads"
+    SESSION_TTL_SECONDS: int = 3600
+
+    # Authentication and Database.
+    SECRET_KEY: str
+    ACCESS_TOKEN_EXPIRE_HOURS: int
+    DATABASE_URL: str = "sqlite:///./artha.db"
 
 
 # Instantiate settings as a module-level singleton.

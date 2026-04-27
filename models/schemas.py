@@ -1,54 +1,98 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Any
 
+"""
+models/schemas.py — Pydantic request / response schemas
+ 
+All schemas used by FastAPI route handlers live here.
+ORM models live in models/db_models.py — kept separate intentionally.
+"""
+ 
+from typing import Any
+from pydantic import BaseModel, EmailStr, Field
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# AUTH SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(..., min_length=8, description="Minimum 8 characters")
+ 
+ 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+ 
+ 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    username: str
+ 
+ 
+class UserResponse(BaseModel):
+    user_id: int
+    username: str
+    email: str
+    created_at: str   # ISO-8601 string; avoids datetime serialisation edge cases
+    
+# ─────────────────────────────────────────────────────────────────────────────
+# CHAT SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+ 
 class ChatRequest(BaseModel):
     """
-    Request body for POST /chat.
-    session_id groups all messages belonging to one conversation.
-    message is the user's raw text input sent to the agent.
+    Body for POST /chat.
+    session_id is NO LONGER sent by the client — it is derived from the JWT.
     """
-    session_id: str = Field(..., description="Unique session identifier.")
-    message: str = Field(..., description="User message text.")
-
-
+    message: str = Field(..., min_length=1, description="User's message to Artha")
+ 
+ 
+class ChatMessageItem(BaseModel):
+    """A single message in the conversation history (frontend-friendly)."""
+    role: str            # "user" | "assistant"
+    content: str         # Clean display text
+    created_at: str      # ISO-8601
+ 
+ 
+class ChatHistoryResponse(BaseModel):
+    """Response for GET /chat/history."""
+    session_id: str
+    message_count: int
+    messages: list[ChatMessageItem]
+ 
+ 
 class ChatResponse(BaseModel):
-    """
-    Response for POST /chat.
-    text is the agent's plain-language reply shown in the chat bubble.
-    data carries structured chart/table output for frontend rendering.
-    The frontend checks data for a 'chart_type' key to decide which
-    visualization component to render. If data is None, render text only.
-    """
     session_id: str
     text: str
-    data: Optional[dict[str, Any]] = None
-
-
+    data: Any | None = None   # Chart-ready JSON when the agent emits a ```data``` block
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# UPLOAD / FILE SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+ 
 class UploadResponse(BaseModel):
-    """
-    Response for POST /upload.
-    file_id is the UUID the agent uses to locate the file later via tool_parse_document.
-    """
     file_id: str
     filename: str
     message: str
-
-
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTEXT SCHEMA
+# ─────────────────────────────────────────────────────────────────────────────
+ 
 class ContextRequest(BaseModel):
-    """
-    Request body for POST /context.
-    Lets the user paste raw text (a news excerpt, a company description,
-    personal notes) that the agent should consider in its replies.
-    """
-    session_id: str
-    context: str
-
-
+    context: str = Field(..., min_length=1)
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# SESSION SCHEMAS
+# ─────────────────────────────────────────────────────────────────────────────
+ 
 class ClearSessionResponse(BaseModel):
-    """Response for DELETE /session/{session_id}."""
     message: str
-
-
-# TODO: In future phases, add:
-# ForecastRequest(ticker, horizon_days) for a dedicated /forecast endpoint.
-# AnalysisReport with typed sections if you add a structured /report endpoint.

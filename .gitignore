@@ -16,3 +16,5 @@ saved_models/
 # System files
 .DS_Store
 Thumbs.db
+
+artha.db

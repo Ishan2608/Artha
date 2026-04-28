@@ -55,8 +55,6 @@ uvicorn main:app --reload
 
 API runs at `http://localhost:8000` · Swagger at `http://localhost:8000/docs`
 
----
-
 ## Environment Variables
 
 ```
@@ -66,8 +64,6 @@ TAVILY_API_KEY=
 NEWS_API_KEY=
 UPLOAD_DIR=uploads
 ```
-
----
 
 ## API
 
@@ -100,11 +96,13 @@ Logs saved to `tests/logs/`.
 ├── main.py              # FastAPI routes
 ├── agent.py             # LangGraph agent + all tool definitions
 ├── config.py            # Env config via pydantic-settings
+├── auth.py              # Authentication utilities -> hash_password(plain), verify_password(plain, hashed), create_access_token(user_id), get_current_user(token, db)
+├── db.py                # SQLite is used out-of-the-box so no infrastructure is needed.
 ├── tools/               # Stock data, web/news search, ticker lookup, forecasting
 ├── utils/               # Doc parser, RAG engine, session store, formatters
-├── ml/                  # DL training.
+├── ml/                  # DL training. Contains IPYNB and model.
 ├── models/schemas.py    # Pydantic request/response models
-├── data/listings/       # INDIA_LIST.csv — merged NSE + BSE listings
+├── data/                # Contains list of companies listed on Indian Stock Market, and the code to extract that data.
 └── tests/               # Tool tests, agent tests, terminal chat client
 ```
 

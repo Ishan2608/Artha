@@ -1,15 +1,9 @@
-"""
-ts_model.py — Amazon Chronos zero-shot price forecasting.
-
-The Chronos pipeline is loaded LAZILY on the first predict_stock_prices() call.
-torch and chronos are NOT imported at module level — they load only when a
-forecast is actually requested, saving ~500MB RAM at startup.
-"""
+# ═════════════════════════════════════════════════════════════════════════════
+# CHRONOS BACKEND  
+# ═════════════════════════════════════════════════════════════════════════════
 
 
-# Global pipeline reference — None until first forecast request
 _pipeline = None
-
 
 def _get_pipeline():
     """
@@ -32,12 +26,10 @@ def _get_pipeline():
 def predict_stock_prices(symbol: str, exchange: str = "NSE", horizon_days: int = 10) -> dict:
     """
     Forecast the next N closing prices for a stock using Amazon Chronos.
-
     Args:
         symbol       : NSE/BSE ticker without suffix.
         exchange     : 'NSE' or 'BSE'.
         horizon_days : Number of trading days to forecast (recommended 5–20).
-
     Returns:
         Dict with historical_dates, historical_closes, forecast_median,
         forecast_low, forecast_high, horizon_days, and a note.
@@ -45,29 +37,26 @@ def predict_stock_prices(symbol: str, exchange: str = "NSE", horizon_days: int =
     """
     import torch
     from tools.stock_data import get_stock_history
-
     try:
         history = get_stock_history(symbol, exchange, period="3mo", interval="1d")
         if "error" in history:
             return history
-
-        closes          = history["close"]
+#
+        closes           = history["close"]
         historical_dates = history["dates"]
-
+#
         context  = torch.tensor(closes, dtype=torch.float32)
         pipeline = _get_pipeline()
-
+#
         quantiles, _ = pipeline.predict_quantiles(
             inputs=context,
             prediction_length=horizon_days,
             quantile_levels=[0.1, 0.5, 0.9],
         )
-
         # quantiles shape: [batch=1, horizon, levels=3]
         forecast_low    = [round(x, 2) for x in quantiles[0, :, 0].tolist()]
         forecast_median = [round(x, 2) for x in quantiles[0, :, 1].tolist()]
         forecast_high   = [round(x, 2) for x in quantiles[0, :, 2].tolist()]
-
         return {
             "symbol":            symbol,
             "chart_type":        "forecast",
@@ -83,6 +72,5 @@ def predict_stock_prices(symbol: str, exchange: str = "NSE", horizon_days: int =
                 "This is for educational purposes and not financial advice."
             ),
         }
-
     except Exception as e:
         return {"error": str(e), "symbol": symbol}

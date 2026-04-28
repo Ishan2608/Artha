@@ -143,6 +143,7 @@ def _print_help():
         ("/upload",   "Upload a file  (PDF · DOCX · XLSX · CSV · TXT · PPT)"),
         ("/context",  "Inject plain-text context or instructions"),
         ("/files",    "List uploaded files in this session"),
+        ("/history",  "Print conversation history (clean display view)"),
         ("/clear",    "Clear session  (history + files)"),
         ("/new",      "Start a brand-new session"),
         ("/session",  "Show current session ID"),
@@ -311,12 +312,15 @@ def _import_project():
     try:
         from agent import run_agent
         from utils.session_store import (
-            append_message, get_history,
+            append_message, get_history, get_display_history,
             add_file, get_files, clear_session,
         )
         from config import settings
-        return run_agent, append_message, get_history, add_file, get_files, \
-               clear_session, settings
+        from db import init_db
+        return (
+            run_agent, append_message, get_history, get_display_history,
+            add_file, get_files, clear_session, settings, init_db,
+        )
     except ImportError as e:
         _err(f"Import error: {e}")
         _err("Activate your venv and ensure .env has API keys.")
@@ -451,15 +455,62 @@ def cmd_clear(session_id: str, get_files_fn, clear_session_fn, logger: SessionLo
     _ok(f"Session cleared. {deleted} file(s) deleted from disk.")
 
 
+def cmd_history(session_id: str, get_display_history_fn):
+    """
+    Print the clean conversation history — same view as GET /chat/history.
+
+    Uses get_display_history() which:
+      - Returns only 'user' and 'assistant' turns (system context injections excluded)
+      - Returns display_content for user messages (clean original text, not the
+        enriched version with [System note:] appended by the agent turn)
+      - Includes created_at timestamps
+    """
+    history = get_display_history_fn(session_id)
+    if not history:
+        _info("No conversation history yet."); return
+
+    _blank()
+    _thick()
+    print(f"  {_c(BG_INFO, '  History  ')}  {_c(MUTED, f'{len(history)} message(s) · session {session_id}')}")
+    _thin()
+    for m in history:
+        role = m["role"]
+        text = m["content"]
+        ts   = m.get("created_at", "")
+        ts_str = f"  {_c(MUTED, str(ts)[:19])}" if ts else ""
+
+        if role == "user":
+            badge = _c(BG_USER, "  You  ")
+            _blank()
+            print(f"  {badge}{ts_str}")
+            for line in textwrap.wrap(text, width=W - 6) or [""]:
+                print(f"      {_c(WHITE, line)}")
+        elif role == "assistant":
+            badge = _c(BG_ARTHA, "  Artha  ")
+            _blank()
+            print(f"  {badge}{ts_str}")
+            for para in text.split("\n"):
+                if not para.strip():
+                    continue
+                for line in textwrap.wrap(para, width=W - 6) or [""]:
+                    print(f"      {_c(MUTED, line)}")
+    _blank()
+    _thick()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MAIN LOOP
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def _chat_loop():
     (
-        run_agent, append_message, get_history,
-        add_file, get_files, clear_session, settings
+        run_agent, append_message, get_history, get_display_history,
+        add_file, get_files, clear_session, settings, init_db,
     ) = _import_project()
+
+    # Ensure all DB tables exist before any session_store call.
+    # Safe to call every run — SQLAlchemy only creates tables that don't exist.
+    init_db()
 
     session_id = f"cli_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     logger     = SessionLogger(session_id)
@@ -495,6 +546,9 @@ async def _chat_loop():
             elif cmd == "/files":
                 cmd_files(session_id, get_files)
 
+            elif cmd == "/history":
+                cmd_history(session_id, get_display_history)
+
             elif cmd == "/upload":
                 cmd_upload(session_id, add_file, settings, logger)
 
@@ -523,8 +577,9 @@ async def _chat_loop():
                 files = get_files(session_id)
 
                 # Build the enriched message that carries session_id to doc tools.
-                # This same enriched form is stored in history so follow-up turns
-                # retain the session context without the user having to repeat it.
+                # Mirrors the exact enrichment logic in main.py /chat so that
+                # session_id context persists on follow-up turns without the user
+                # having to repeat themselves.
                 if files:
                     file_names = ", ".join(f["filename"] for f in files)
                     enriched = (
@@ -548,10 +603,15 @@ async def _chat_loop():
                 try:
                     result = await run_agent(session_id, enriched)
 
-                    # Append ENRICHED message to history (not the raw input).
-                    # This ensures session_id context persists on follow-up turns
-                    # about the same documents without the user repeating themselves.
-                    append_message(session_id, "user",      enriched)
+                    # Store enriched content for agent memory, but pass the
+                    # original clean text as display_content so /history and
+                    # GET /chat/history never expose the [System note:] injection.
+                    # This mirrors the append_message calls in main.py /chat.
+                    append_message(
+                        session_id, "user",
+                        content=enriched,
+                        display_content=user_input,
+                    )
                     append_message(session_id, "assistant", result["text"])
 
                     _print_agent(result["text"], result.get("data"), logger)

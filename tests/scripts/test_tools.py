@@ -227,39 +227,94 @@ _LOG: TestLogger | None = None
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_session_store():
-    _header(1, "Session Store")
-    from utils.session_store import append_message, get_history, clear_session, add_file, get_files
+    _header(1, "Session Store — DB-backed")
+    from db import init_db
+    from utils.session_store import (
+        append_message, get_history, get_display_history,
+        clear_session, add_file, get_files,
+    )
 
-    sid = "artha_test_session"
-    try:
-        clear_session(sid)          # session may not exist yet — that's fine
-    except KeyError:
-        pass
+    # Use a numeric string to match the real session_id format (str(user.id))
+    sid = "99999"
 
-    # Messages
-    append_message(sid, "user",      "Analyse HDFC Bank for me.")
+    # DB-backed clear_session never raises — no try/except needed
+    clear_session(sid)
+
+    # ── 1. append_message with display_content (mirrors the /chat enrichment flow) ──
+    _section("append_message · user + assistant + system")
+    enriched_msg = (
+        "Analyse HDFC Bank for me.\n\n"
+        "[System note: session_id='99999'. No files uploaded in this session yet.]"
+    )
+    append_message(
+        sid, "user",
+        content=enriched_msg,
+        display_content="Analyse HDFC Bank for me.",   # clean version for UI
+    )
     append_message(sid, "assistant", "HDFC Bank (HDFCBANK.NS) is a leading private sector bank…")
     append_message(sid, "system",    "[User-provided context]: Focus on dividend history.")
 
+    # ── 2. get_history — full history including system messages (used by agent) ──
+    _section("get_history · agent view (all roles, enriched content)")
     hist = get_history(sid)
-    _section("Stored Messages")
     _table(
         [(f"[{i+1}] {m['role']}", m["content"][:70]) for i, m in enumerate(hist)],
-        title="session · artha_test_session"
+        title="session · get_history"
     )
-    assert len(hist) == 3, f"Expected 3, got {len(hist)}"
-    _pass("3 messages stored and retrieved correctly")
+    assert len(hist) == 3, f"Expected 3 messages, got {len(hist)}"
+    assert hist[0]["role"] == "user"
+    assert hist[1]["role"] == "assistant"
+    assert hist[2]["role"] == "system"
+    # Agent must receive the enriched content, not the clean display version
+    assert "[System note:" in hist[0]["content"], \
+        "get_history must return enriched content for agent memory"
+    _pass("get_history returns all 3 messages with enriched content")
+    _LOG.log_result("session_store_get_history", True)
 
-    # File registration
-    add_file(sid, "uuid-001", "/tmp/annual_report.pdf", "annual_report.pdf")
+    # ── 3. get_display_history — UI view (user + assistant only, clean text) ──
+    _section("get_display_history · UI view (user + assistant, display_content)")
+    display = get_display_history(sid)
+    _table(
+        [(f"[{i+1}] {m['role']}", m["content"][:70]) for i, m in enumerate(display)],
+        title="session · get_display_history"
+    )
+    assert len(display) == 2, \
+        f"Expected 2 display messages (system excluded), got {len(display)}"
+    assert display[0]["role"] == "user"
+    assert display[1]["role"] == "assistant"
+    # Must expose display_content (clean text), not the enriched version with [System note:]
+    assert "[System note:" not in display[0]["content"], \
+        "get_display_history must return display_content, not enriched content"
+    assert display[0]["content"] == "Analyse HDFC Bank for me.", \
+        f"Expected clean display text, got: {display[0]['content']}"
+    # Each record must carry a timestamp for the history UI
+    assert "created_at" in display[0], "get_display_history entries must include created_at"
+    _pass("get_display_history: 2 messages, system excluded, clean display_content returned")
+    _LOG.log_result("session_store_display_history", True)
+
+    # ── 4. File registration ──
+    _section("add_file · get_files")
+    add_file(sid, "uuid-test-001", "/tmp/annual_report.pdf", "annual_report.pdf")
     files = get_files(sid)
-    _section("File Registration")
-    _table([(f["file_id"][:8], f["filename"]) for f in files], title="registered files")
-    assert len(files) == 1
-    _pass("File registration works")
+    _table([(f["file_id"][:12], f["filename"]) for f in files], title="registered files")
+    assert len(files) == 1, f"Expected 1 file, got {len(files)}"
+    assert files[0]["file_id"] == "uuid-test-001"
+    assert files[0]["filename"] == "annual_report.pdf"
+    assert "filepath" in files[0], "get_files must include 'filepath' for document tools"
+    _pass("File registration and retrieval work correctly")
+    _LOG.log_result("session_store_files", True)
+
+    # ── 5. clear_session — wipes messages AND files ──
+    _section("clear_session · idempotent cleanup")
+    clear_session(sid)
+    assert get_history(sid) == [], "get_history must be empty after clear_session"
+    assert get_files(sid)   == [], "get_files must be empty after clear_session"
+    # Second clear on an empty session must not raise
+    clear_session(sid)
+    _pass("clear_session wipes messages and files; safe to call on non-existent session")
+    _LOG.log_result("session_store_clear", True)
 
     _LOG.log_result("session_store", True)
-    clear_session(sid)
 
 
 def test_formatters():
@@ -681,6 +736,11 @@ if __name__ == "__main__":
     print(f"  {_c(BG_HEADER, '  ARTHA  ')}  {_c(WHITE, 'Tool Test Suite')}  "
           f"{_c(MUTED, datetime.now().strftime('%Y-%m-%d  %H:%M:%S'))}")
     _thick()
+
+    # Initialise DB tables before any test that touches session_store.
+    # Safe to call multiple times — SQLAlchemy only creates tables that don't exist.
+    from db import init_db
+    init_db()
 
     tests = [
         test_session_store,

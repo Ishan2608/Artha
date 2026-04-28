@@ -102,6 +102,7 @@ Logs saved to `tests/logs/`.
 ├── config.py            # Env config via pydantic-settings
 ├── tools/               # Stock data, web/news search, ticker lookup, forecasting
 ├── utils/               # Doc parser, RAG engine, session store, formatters
+├── ml/                  # DL training.
 ├── models/schemas.py    # Pydantic request/response models
 ├── data/listings/       # INDIA_LIST.csv — merged NSE + BSE listings
 └── tests/               # Tool tests, agent tests, terminal chat client

@@ -223,6 +223,7 @@ async def chat(
     The 'data' field is None for plain text replies and populated with chart-ready
     JSON when the agent includes a ```data ...``` block in its response.
     """
+    
     session_id = str(current_user.id)
     files = get_files(session_id)
 

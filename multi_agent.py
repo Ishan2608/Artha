@@ -391,8 +391,13 @@ def _build_agents() -> None:
     )
 
     # ── Orchestrator LLM ─────────────────────────────────────────────────────
-    groq_llm = ChatGroq(
-        model="llama-3.3-70b-versatile",
+    qroq_llm = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite-preview",
+        google_api_key=settings.GEMINI_API_KEY,
+        temperature=0.1,
+    )
+    orchestrator = ChatGoogleGenerativeAI(
+        model="gemini-3.1-flash-lite-preview",
         api_key=settings.GROQ_API_KEY,
         temperature=0.1,
     )
@@ -499,7 +504,7 @@ def _build_agents() -> None:
 
     # ── Guide Agent ───────────────────────────────────────────────────────────
     _guide_agent = create_react_agent(
-        model=groq_llm,
+        model=orchestrator,
         tools=[call_stock_analysis_agent, call_stock_aggregator_agent],
     )
 

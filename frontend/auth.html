@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Artha — Sign In</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #C9A84C;
+      --gold-light: #E2C07A;
+      --gold-dim: rgba(201,168,76,0.10);
+      --surface: #111318;
+      --surface-2: #181C24;
+      --surface-3: #1E2330;
+      --border: rgba(201,168,76,0.18);
+      --border-focus: rgba(201,168,76,0.55);
+      --text-muted: #7A8099;
+      --error: #E05050;
+      --success: #3DBA6F;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: var(--surface);
+      color: #E8EAEF;
+      min-height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    h1, h2, h3, h4, .font-heading { font-family: 'Montserrat', sans-serif; }
+
+    /* ── Left panel ── */
+    .left-panel {
+      display: none;
+      flex: 1;
+      background: var(--surface-2);
+      border-right: 1px solid var(--border);
+      padding: 3rem;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    @media (min-width: 900px) { .left-panel { display: flex; } }
+
+    .left-grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .left-glow {
+      position: absolute;
+      bottom: -100px; left: -100px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .left-logo {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+      position: relative; z-index: 1;
+    }
+
+    .left-tagline {
+      position: relative; z-index: 1;
+    }
+
+    .left-tagline h2 {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 2.2rem;
+      line-height: 1.15;
+      color: #E8EAEF;
+    }
+
+    .left-tagline h2 span {
+      background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .left-tagline p {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      margin-top: 0.75rem;
+      line-height: 1.7;
+    }
+
+    .left-features {
+      display: flex; flex-direction: column; gap: 1rem;
+      position: relative; z-index: 1;
+    }
+
+    .left-feature {
+      display: flex; align-items: center; gap: 0.75rem;
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .left-feature-dot {
+      width: 6px; height: 6px;
+      background: var(--gold);
+      flex-shrink: 0;
+    }
+
+    /* ── Right panel (form area) ── */
+    .right-panel {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem;
+      max-width: 520px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    @media (min-width: 900px) { .right-panel { max-width: none; } }
+
+    .auth-card {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .tab {
+      flex: 1;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      padding: 0.9rem 0;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .tab.active {
+      color: var(--gold);
+    }
+
+    .tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px; left: 0; right: 0;
+      height: 2px;
+      background: var(--gold);
+    }
+
+    /* ── Heading ── */
+    .auth-heading {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 1.6rem;
+      color: #E8EAEF;
+      margin-bottom: 0.4rem;
+    }
+
+    .auth-sub {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+
+    /* ── Form elements ── */
+    .field {
+      margin-bottom: 1.2rem;
+    }
+
+    label {
+      display: block;
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.45rem;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: #E8EAEF;
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.92rem;
+      padding: 0.75rem 1rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input::placeholder { color: rgba(122,128,153,0.5); }
+
+    input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(201,168,76,0.06);
+    }
+
+    input.error-field { border-color: var(--error); }
+
+    .field-error {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.74rem;
+      color: var(--error);
+      margin-top: 0.35rem;
+      display: none;
+    }
+
+    /* ── Submit ── */
+    .btn-submit {
+      width: 100%;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.85rem;
+      background: linear-gradient(135deg, var(--gold) 0%, #A8732A 100%);
+      color: #0D0F13;
+      border: none;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+      transition: opacity 0.2s, transform 0.15s;
+      position: relative;
+    }
+
+    .btn-submit:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(13,15,19,0.4);
+      border-top-color: #0D0F13;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Alert ── */
+    .alert {
+      display: none;
+      padding: 0.75rem 1rem;
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.82rem;
+      margin-bottom: 1.25rem;
+      border-left: 3px solid;
+    }
+
+    .alert.error {
+      background: rgba(224,80,80,0.08);
+      border-color: var(--error);
+      color: #F08080;
+    }
+
+    .alert.success {
+      background: rgba(61,186,111,0.08);
+      border-color: var(--success);
+      color: #5DD98D;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex; align-items: center; gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .divider-line {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .divider-text {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.72rem;
+      color: rgba(122,128,153,0.55);
+      text-align: center;
+      margin-top: 1.5rem;
+      line-height: 1.5;
+    }
+
+    /* ── Password strength ── */
+    .strength-bar {
+      height: 3px;
+      background: var(--surface-3);
+      margin-top: 0.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .strength-fill {
+      height: 100%;
+      width: 0;
+      transition: width 0.3s, background 0.3s;
+    }
+
+    /* ── Slide animation ── */
+    .form-section {
+      animation: slideIn 0.25s ease both;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(10px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Left brand panel -->
+  <div class="left-panel">
+    <div class="left-grid"></div>
+    <div class="left-glow"></div>
+
+    <div class="left-logo">ARTHA</div>
+
+    <div class="left-tagline">
+      <h2>Intelligence for the<br><span>Indian Investor.</span></h2>
+      <p>Three specialist AI agents working together to give you institutional-grade financial analysis, in plain language.</p>
+    </div>
+
+    <div class="left-features">
+      <div class="left-feature"><div class="left-feature-dot"></div>Real-time NSE & BSE data</div>
+      <div class="left-feature"><div class="left-feature-dot"></div>Upload and query financial documents</div>
+      <div class="left-feature"><div class="left-feature-dot"></div>Transformer-based price forecasting</div>
+      <div class="left-feature"><div class="left-feature-dot"></div>News sentiment & web research</div>
+      <div class="left-feature"><div class="left-feature-dot"></div>Corporate actions & ESG data</div>
+      <div class="left-feature" style="margin-top:0.5rem; font-size:0.75rem; color:rgba(122,128,153,0.5);">
+        <div class="left-feature-dot" style="background:rgba(201,168,76,0.3);"></div>
+        Not financial advice. For research only.
+      </div>
+    </div>
+  </div>
+
+  <!-- Right form panel -->
+  <div class="right-panel">
+    <div class="auth-card">
+
+      <!-- Back to home -->
+      <a href="index.html" style="display:inline-flex; align-items:center; gap:0.4rem; font-family:'Roboto',sans-serif; font-size:0.78rem; color:var(--text-muted); text-decoration:none; margin-bottom:2rem; transition:color 0.2s;">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 7H2M6 3L2 7l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Back to home
+      </a>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" id="tab-login" onclick="switchTab('login')">Sign In</button>
+        <button class="tab" id="tab-register" onclick="switchTab('register')">Create Account</button>
+      </div>
+
+      <!-- Alert -->
+      <div class="alert" id="alert"></div>
+
+      <!-- LOGIN FORM -->
+      <div id="form-login" class="form-section">
+        <div class="auth-heading">Welcome back.</div>
+        <div class="auth-sub">Sign in to continue your analysis.</div>
+
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+          <div class="field-error" id="login-email-err">Please enter a valid email.</div>
+        </div>
+
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+          <div class="field-error" id="login-password-err">Password is required.</div>
+        </div>
+
+        <button class="btn-submit" id="btn-login" onclick="handleLogin()">Sign In</button>
+      </div>
+
+      <!-- REGISTER FORM -->
+      <div id="form-register" class="form-section" style="display:none;">
+        <div class="auth-heading">Create your account.</div>
+        <div class="auth-sub">Get started in under a minute.</div>
+
+        <div class="field">
+          <label for="reg-username">Username</label>
+          <input type="text" id="reg-username" placeholder="artha_user" autocomplete="username" />
+          <div class="field-error" id="reg-username-err">Username must be at least 3 characters.</div>
+        </div>
+
+        <div class="field">
+          <label for="reg-email">Email</label>
+          <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email" />
+          <div class="field-error" id="reg-email-err">Please enter a valid email.</div>
+        </div>
+
+        <div class="field">
+          <label for="reg-password">Password</label>
+          <input type="password" id="reg-password" placeholder="min. 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)" />
+          <div class="strength-bar"><div class="strength-fill" id="strength-fill"></div></div>
+          <div class="field-error" id="reg-password-err">Password must be at least 8 characters.</div>
+        </div>
+
+        <button class="btn-submit" id="btn-register" onclick="handleRegister()">Create Account</button>
+      </div>
+
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span class="divider-text">Artha</span>
+        <div class="divider-line"></div>
+      </div>
+
+      <p class="disclaimer">
+        By continuing you agree that Artha provides research assistance only and does not constitute regulated financial advice.
+      </p>
+
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8000';
+
+    // ── Check URL param for initial mode ──────────────────────────────────────
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'register') {
+      switchTab('register');
+    }
+
+    // ── If already logged in, redirect to chat ────────────────────────────────
+    if (localStorage.getItem('artha_token')) {
+      window.location.href = 'chat.html';
+    }
+
+    // ── Tab switching ─────────────────────────────────────────────────────────
+    function switchTab(tab) {
+      document.getElementById('form-login').style.display    = tab === 'login'    ? 'block' : 'none';
+      document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+      document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+      document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+      hideAlert();
+
+      // Re-trigger slide animation
+      const el = document.getElementById(tab === 'login' ? 'form-login' : 'form-register');
+      el.style.animation = 'none';
+      el.offsetHeight; // reflow
+      el.style.animation = '';
+    }
+
+    // ── Alert helpers ─────────────────────────────────────────────────────────
+    function showAlert(msg, type = 'error') {
+      const el = document.getElementById('alert');
+      el.textContent = msg;
+      el.className = `alert ${type}`;
+      el.style.display = 'block';
+    }
+
+    function hideAlert() {
+      const el = document.getElementById('alert');
+      el.style.display = 'none';
+    }
+
+    function setLoading(btnId, loading, label) {
+      const btn = document.getElementById(btnId);
+      btn.disabled = loading;
+      btn.innerHTML = loading ? `<span class="spinner"></span> Please wait…` : label;
+    }
+
+    function showFieldError(id, show) {
+      const err = document.getElementById(id + '-err');
+      const inp = document.getElementById(id);
+      if (err) err.style.display = show ? 'block' : 'none';
+      if (inp) inp.classList.toggle('error-field', show);
+    }
+
+    // ── Password strength ─────────────────────────────────────────────────────
+    function checkStrength(val) {
+      const fill = document.getElementById('strength-fill');
+      const len = val.length;
+      let pct = 0; let color = '#E05050';
+      if (len >= 12 && /[A-Z]/.test(val) && /[0-9]/.test(val) && /[^a-zA-Z0-9]/.test(val)) { pct = 100; color = '#3DBA6F'; }
+      else if (len >= 8 && (/[A-Z]/.test(val) || /[0-9]/.test(val))) { pct = 65; color = '#C9A84C'; }
+      else if (len >= 6) { pct = 35; color = '#E08050'; }
+      else if (len > 0) { pct = 15; }
+      fill.style.width = pct + '%';
+      fill.style.background = color;
+    }
+
+    // ── Login ─────────────────────────────────────────────────────────────────
+    async function handleLogin() {
+      hideAlert();
+      const email    = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      let valid = true;
+      if (!email || !/\S+@\S+\.\S+/.test(email)) { showFieldError('login-email', true); valid = false; } else { showFieldError('login-email', false); }
+      if (!password) { showFieldError('login-password', true); valid = false; } else { showFieldError('login-password', false); }
+      if (!valid) return;
+
+      setLoading('btn-login', true, 'Sign In');
+      try {
+        const res  = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Login failed.');
+        localStorage.setItem('artha_token',    data.access_token);
+        localStorage.setItem('artha_user_id',  data.user_id);
+        localStorage.setItem('artha_username', data.username);
+        showAlert('Signed in! Redirecting…', 'success');
+        setTimeout(() => { window.location.href = 'chat.html'; }, 700);
+      } catch (e) {
+        showAlert(e.message);
+      } finally {
+        setLoading('btn-login', false, 'Sign In');
+      }
+    }
+
+    // ── Register ──────────────────────────────────────────────────────────────
+    async function handleRegister() {
+      hideAlert();
+      const username = document.getElementById('reg-username').value.trim();
+      const email    = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+
+      let valid = true;
+      if (username.length < 3)             { showFieldError('reg-username', true); valid = false; } else { showFieldError('reg-username', false); }
+      if (!email || !/\S+@\S+\.\S+/.test(email)) { showFieldError('reg-email', true); valid = false; } else { showFieldError('reg-email', false); }
+      if (password.length < 8)             { showFieldError('reg-password', true); valid = false; } else { showFieldError('reg-password', false); }
+      if (!valid) return;
+
+      setLoading('btn-register', true, 'Create Account');
+      try {
+        const res  = await fetch(`${API_BASE}/auth/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Registration failed.');
+        localStorage.setItem('artha_token',    data.access_token);
+        localStorage.setItem('artha_user_id',  data.user_id);
+        localStorage.setItem('artha_username', data.username);
+        showAlert('Account created! Redirecting…', 'success');
+        setTimeout(() => { window.location.href = 'chat.html'; }, 700);
+      } catch (e) {
+        showAlert(e.message);
+      } finally {
+        setLoading('btn-register', false, 'Create Account');
+      }
+    }
+
+    // ── Enter key submit ──────────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const loginVisible = document.getElementById('form-login').style.display !== 'none';
+        if (loginVisible) handleLogin();
+        else handleRegister();
+      }
+    });
+  </script>
+</body>
+</html>

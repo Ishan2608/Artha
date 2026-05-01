@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Artha — AI Financial Analyst</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #C9A84C;
+      --gold-light: #E2C07A;
+      --gold-dim: rgba(201,168,76,0.12);
+      --surface: #111318;
+      --surface-2: #181C24;
+      --surface-3: #1E2330;
+      --border: rgba(201,168,76,0.18);
+      --text-muted: #7A8099;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: var(--surface);
+      color: #E8EAEF;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, h4, h5, h6, .font-heading {
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    /* ── Background grid ── */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(201,168,76,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(201,168,76,0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* ── Glows ── */
+    .glow-top {
+      position: fixed;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      width: 900px; height: 500px;
+      background: radial-gradient(ellipse, rgba(201,168,76,0.10) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Navbar ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 2rem;
+      height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(17,19,24,0.82);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 1.35rem;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+    }
+
+    .logo span {
+      color: #E8EAEF;
+      font-weight: 300;
+    }
+
+    .nav-links { display: flex; align-items: center; gap: 2rem; }
+
+    .nav-link {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--gold-light); }
+
+    /* ── Buttons ── */
+    .btn-gold {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.65rem 1.6rem;
+      background: linear-gradient(135deg, var(--gold) 0%, #A8732A 100%);
+      color: #0D0F13;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+      transition: opacity 0.2s, transform 0.15s;
+      position: relative;
+    }
+    .btn-gold:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    .btn-outline {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.6rem 1.5rem;
+      background: transparent;
+      color: var(--gold);
+      border: 1px solid var(--gold);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s, color 0.2s;
+    }
+    .btn-outline:hover { background: var(--gold-dim); }
+
+    /* ── Hero ── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 7rem 1.5rem 4rem;
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px solid var(--border);
+      background: var(--gold-dim);
+      padding: 0.35rem 1rem;
+      margin-bottom: 2rem;
+      animation: fadeDown 0.7s ease both;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--gold);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .hero-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: clamp(3rem, 8vw, 6rem);
+      line-height: 1.0;
+      letter-spacing: -0.02em;
+      color: #E8EAEF;
+      animation: fadeDown 0.7s 0.1s ease both;
+    }
+
+    .hero-title .accent {
+      display: block;
+      background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 60%, #FFF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-family: 'Roboto', sans-serif;
+      font-weight: 300;
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--text-muted);
+      max-width: 560px;
+      margin: 1.5rem auto 2.5rem;
+      line-height: 1.7;
+      animation: fadeDown 0.7s 0.2s ease both;
+    }
+
+    .hero-cta {
+      display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;
+      animation: fadeDown 0.7s 0.3s ease both;
+    }
+
+    /* ── Ticker tape ── */
+    .ticker-wrap {
+      position: relative; z-index: 1;
+      width: 100%;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      padding: 0.6rem 0;
+    }
+
+    .ticker-inner {
+      display: flex;
+      gap: 3rem;
+      width: max-content;
+      animation: ticker 30s linear infinite;
+    }
+
+    .ticker-item {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 500;
+      white-space: nowrap;
+      color: var(--text-muted);
+      letter-spacing: 0.03em;
+    }
+
+    .ticker-item .sym { color: #E8EAEF; font-weight: 700; }
+    .ticker-item .up  { color: #3DBA6F; }
+    .ticker-item .dn  { color: #E05050; }
+
+    @keyframes ticker {
+      from { transform: translateX(0); }
+      to   { transform: translateX(-50%); }
+    }
+
+    /* ── Feature cards ── */
+    .features {
+      position: relative; z-index: 1;
+      padding: 5rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      line-height: 1.15;
+      color: #E8EAEF;
+      margin-bottom: 1rem;
+    }
+
+    .section-sub {
+      font-family: 'Roboto', sans-serif;
+      font-size: 1rem;
+      color: var(--text-muted);
+      max-width: 520px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5px;
+      margin-top: 3rem;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .feature-card {
+      background: var(--surface-2);
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      transition: background 0.25s;
+    }
+    .feature-card:hover { background: var(--surface-3); }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 0;
+      background: var(--gold);
+      transition: height 0.3s ease;
+    }
+    .feature-card:hover::before { height: 100%; }
+
+    .feature-icon {
+      width: 42px; height: 42px;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1.25rem;
+      font-size: 1.2rem;
+      background: var(--gold-dim);
+    }
+
+    .feature-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      color: #E8EAEF;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-desc {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* ── How it works ── */
+    .how-it-works {
+      position: relative; z-index: 1;
+      padding: 5rem 1.5rem;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 2rem;
+      max-width: 900px;
+      margin: 3rem auto 0;
+    }
+
+    .step {
+      display: flex; flex-direction: column; gap: 0.75rem;
+    }
+
+    .step-num {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 3rem;
+      line-height: 1;
+      color: var(--border);
+      letter-spacing: -0.03em;
+    }
+
+    .step-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--gold-light);
+    }
+
+    .step-desc {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    /* ── Stats ── */
+    .stats-row {
+      position: relative; z-index: 1;
+      display: flex; flex-wrap: wrap;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem;
+      gap: 2rem;
+      justify-content: space-around;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 900;
+      font-size: 2.8rem;
+      color: var(--gold);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 0.4rem;
+    }
+
+    /* ── CTA Banner ── */
+    .cta-banner {
+      position: relative; z-index: 1;
+      margin: 0 1.5rem 5rem;
+      max-width: 900px;
+      margin-left: auto; margin-right: auto;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 3.5rem 3rem;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 2rem;
+      overflow: hidden;
+    }
+
+    .cta-banner::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(201,168,76,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-banner-title {
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 800;
+      font-size: 1.8rem;
+      color: #E8EAEF;
+      line-height: 1.2;
+    }
+
+    .cta-banner-sub {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative; z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 2rem 2rem;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .footer-copy {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .footer-disclaimer {
+      font-family: 'Roboto', sans-serif;
+      font-size: 0.72rem;
+      color: rgba(122,128,153,0.6);
+      max-width: 400px;
+      line-height: 1.5;
+    }
+
+    /* ── Animations ── */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-up { animation: fadeUp 0.6s ease both; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      nav { padding: 0 1rem; }
+      .nav-links { gap: 1rem; }
+      .cta-banner { padding: 2rem 1.5rem; justify-content: center; text-align: center; }
+      footer { justify-content: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background -->
+  <div class="grid-bg"></div>
+  <div class="glow-top"></div>
+
+  <!-- Navbar -->
+  <nav>
+    <div class="logo">ARTHA<span> &nbsp;Finance AI</span></div>
+    <div class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#how" class="nav-link">How It Works</a>
+      <a href="auth.html" class="btn-outline" style="padding:0.45rem 1.2rem; font-size:0.75rem;">Login</a>
+      <a href="auth.html?mode=register" class="btn-gold" style="padding:0.5rem 1.2rem; font-size:0.75rem;">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span>Powered by LangGraph · Gemini · Groq</span>
+    </div>
+    <h1 class="hero-title">
+      Your Personal
+      <span class="accent">Financial Analyst</span>
+      for India
+    </h1>
+    <p class="hero-subtitle">
+      Institutional-grade intelligence for Indian retail investors. Analyse stocks, read your documents, and forecast markets — all in plain language.
+    </p>
+    <div class="hero-cta">
+      <a href="auth.html?mode=register" class="btn-gold" style="font-size:0.88rem; padding:0.85rem 2rem;">
+        Start Analysing Free
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a href="auth.html" class="btn-outline" style="font-size:0.88rem; padding:0.85rem 2rem;">Sign In</a>
+    </div>
+
+    <!-- Mini chart decoration -->
+    <div style="margin-top:3.5rem; position:relative; width:100%; max-width:680px;">
+      <div style="border:1px solid var(--border); background:var(--surface-2); padding:1.2rem 1.5rem; position:relative; overflow:hidden;">
+        <div style="position:absolute; inset:0; background: linear-gradient(to bottom, transparent 60%, var(--surface) 100%); pointer-events:none; z-index:2;"></div>
+        <div style="font-family:'Roboto',sans-serif; font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;">
+          TCS.NS &nbsp;·&nbsp; 1 Month
+        </div>
+        <svg viewBox="0 0 640 100" xmlns="http://www.w3.org/2000/svg" style="width:100%; height:70px;">
+          <defs>
+            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="rgba(201,168,76,0.3)"/>
+              <stop offset="100%" stop-color="rgba(201,168,76,0)"/>
+            </linearGradient>
+          </defs>
+          <path d="M0,70 C30,65 50,75 80,60 C110,45 130,40 160,42 C190,44 210,55 240,48 C270,41 290,30 320,28 C350,26 370,35 400,30 C430,25 450,18 480,20 C510,22 530,15 560,12 C590,9 610,16 640,10 L640,100 L0,100 Z" fill="url(#chartGrad)"/>
+          <path d="M0,70 C30,65 50,75 80,60 C110,45 130,40 160,42 C190,44 210,55 240,48 C270,41 290,30 320,28 C350,26 370,35 400,30 C430,25 450,18 480,20 C510,22 530,15 560,12 C590,9 610,16 640,10" fill="none" stroke="var(--gold)" stroke-width="2"/>
+        </svg>
+        <div style="display:flex; justify-content:space-between; margin-top:0.25rem;">
+          <span style="font-family:'Montserrat',sans-serif; font-weight:700; font-size:0.85rem; color:#E8EAEF;">₹3,872.40</span>
+          <span style="font-family:'Roboto',sans-serif; font-size:0.78rem; color:#3DBA6F; font-weight:500;">+5.24% ↑</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ticker tape -->
+  <div class="ticker-wrap">
+    <div class="ticker-inner" id="ticker">
+      <!-- Items duplicated for seamless loop -->
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row fade-up">
+    <div class="stat"><div class="stat-num">50+</div><div class="stat-label">NIFTY Stocks Tracked</div></div>
+    <div class="stat"><div class="stat-num">3</div><div class="stat-label">Specialist AI Agents</div></div>
+    <div class="stat"><div class="stat-num">7</div><div class="stat-label">File Formats Supported</div></div>
+    <div class="stat"><div class="stat-num">Real-time</div><div class="stat-label">Market Data</div></div>
+  </div>
+
+  <!-- Features -->
+  <section class="features" id="features">
+    <div>
+      <div class="section-label">Core Capabilities</div>
+      <h2 class="section-title">Everything a retail investor needs,<br>in one place.</h2>
+      <p class="section-sub">Artha deploys three coordinated AI agents to give you answers that would otherwise require a research team.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">Fundamental Analysis</div>
+        <p class="feature-desc">Ask about PE ratios, balance sheets, profit & loss, cash flow, promoter holding, and more — across any NSE/BSE-listed company.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📈</div>
+        <div class="feature-title">Price Forecasting</div>
+        <p class="feature-desc">Transformer-based models trained on NIFTY 50 and major Indian stocks deliver probabilistic forecasts with confidence bands.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📰</div>
+        <div class="feature-title">News & Sentiment</div>
+        <p class="feature-desc">Real-time news search and web research lets Artha factor in the latest headlines and analyst commentary into its responses.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <div class="feature-title">Document Intelligence</div>
+        <p class="feature-desc">Upload annual reports, prospectuses, earnings calls (PDF, DOCX, XLSX, CSV, PPT) and ask natural language questions about them.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏢</div>
+        <div class="feature-title">Corporate Actions</div>
+        <p class="feature-desc">Track dividends, bonus shares, stock splits, and upcoming earnings dates for any listed company, instantly.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌿</div>
+        <div class="feature-title">ESG & Governance</div>
+        <p class="feature-desc">Access sustainability scores, ESG ratings, and governance metrics alongside traditional financial data for holistic analysis.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="how-it-works" id="how">
+    <div style="max-width:900px; margin:0 auto; padding:0 1rem;">
+      <div class="section-label">Under The Hood</div>
+      <h2 class="section-title">Multi-Agent Intelligence</h2>
+      <p class="section-sub">Artha is not a single chatbot. It is an orchestrated team of specialist AI agents working in concert.</p>
+      <div class="steps-grid">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-title">Guide Agent (Groq / LLaMA)</div>
+          <p class="step-desc">Receives your query, resolves entities, and delegates to the right specialist — or both simultaneously for complex requests.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-title">Analysis Specialist (Gemini)</div>
+          <p class="step-desc">Fetches hard structured data — prices, financials, corporate actions, analyst targets — directly from market data APIs.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-title">Research Specialist (Gemini)</div>
+          <p class="step-desc">Searches the web, reads the news, parses your uploaded documents, and runs forecasting models.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">04</div>
+          <div class="step-title">Synthesised Reply</div>
+          <p class="step-desc">Results from all specialists are merged into one coherent, professional answer — with charts where relevant.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Banner -->
+  <div style="padding: 4rem 1.5rem; position:relative; z-index:1;">
+    <div class="cta-banner">
+      <div>
+        <div class="cta-banner-title">Start your analysis today.</div>
+        <div class="cta-banner-sub">No credit card required. Works with any NSE or BSE listed company.</div>
+      </div>
+      <a href="auth.html?mode=register" class="btn-gold" style="font-size:0.88rem; padding:0.9rem 2rem; white-space:nowrap;">
+        Create Free Account →
+      </a>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <div>
+      <div class="logo" style="font-size:1rem;">ARTHA</div>
+      <div class="footer-copy" style="margin-top:0.4rem;">© 2025 Artha Finance AI</div>
+    </div>
+    <div class="footer-disclaimer">
+      Artha is an AI research tool and does not constitute financial advice. Past performance is not indicative of future results. Please consult a registered financial advisor before making investment decisions.
+    </div>
+  </footer>
+
+  <script>
+    // Populate ticker tape
+    const tickers = [
+      { sym: 'TCS', price: '3,872.40', chg: '+1.24%', up: true },
+      { sym: 'RELIANCE', price: '2,941.10', chg: '-0.38%', up: false },
+      { sym: 'HDFCBANK', price: '1,672.85', chg: '+0.91%', up: true },
+      { sym: 'INFY', price: '1,504.60', chg: '+2.14%', up: true },
+      { sym: 'WIPRO', price: '456.30', chg: '-0.52%', up: false },
+      { sym: 'ICICIBANK', price: '1,108.45', chg: '+1.55%', up: true },
+      { sym: 'BAJFINANCE', price: '6,782.10', chg: '-1.20%', up: false },
+      { sym: 'MARUTI', price: '12,140.70', chg: '+0.44%', up: true },
+      { sym: 'SBIN', price: '754.20', chg: '-0.18%', up: false },
+      { sym: 'LTIM', price: '5,280.50', chg: '+3.01%', up: true },
+    ];
+
+    const el = document.getElementById('ticker');
+    const items = [...tickers, ...tickers]; // duplicate for seamless loop
+    items.forEach(t => {
+      const div = document.createElement('div');
+      div.className = 'ticker-item';
+      div.innerHTML = `
+        <span class="sym">${t.sym}</span>
+        <span>₹${t.price}</span>
+        <span class="${t.up ? 'up' : 'dn'}">${t.chg}</span>
+      `;
+      el.appendChild(div);
+    });
+  </script>
+</body>
+</html>

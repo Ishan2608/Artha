@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY_AGGREGATOR: str
 
     # Single and Mulit-Agent System.
-    GROQ_API_KEY: str
+    GROQ_API_KEY: str = ""
 
     # Tools API Keys
     TAVILY_API_KEY: str

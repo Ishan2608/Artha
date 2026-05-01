@@ -695,7 +695,7 @@ def test_rag_engine():
 
 
 def test_forecasting():
-    _header(16, "Chronos T5 Forecasting — WIPRO · TCS")
+    _header(16, "Forecasting — WIPRO · TCS")
     from tools.ts_model import predict_stock_prices
 
     cases = [("WIPRO", 10), ("TCS", 5)]

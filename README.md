@@ -2,6 +2,21 @@
 
 > A production-ready REST API for conversational financial intelligence. Artha combines a ReAct agent, real-time market data, document RAG, and a custom-trained Transformer forecasting model into a single, authenticated backend.
 
+## Sample Output
+
+**Terminal chat — query and response (Test Run)**
+
+![Test Run - Query](./docs/outputs/1.PNG)
+![Test Run - Result](./docs/outputs/2.PNG)
+
+**Web UI **
+
+![UI - Auth Page](./docs/outputs/3.PNG)
+![Sample Chatting](./docs/outputs/chat_ans1.PNG)
+![Sample Chatting](./docs/outputs/chat_ans2.PNG)
+![Sample Chatting](./docs/outputs/chat_ans3.PNG)
+![Sample Chatting](./docs/outputs/chat_ans4.PNG)
+
 ---
 
 ## Table of Contents
@@ -347,23 +362,6 @@ The original Chronos T5 Tiny backend is preserved as commented-out code in `tool
 2. Uncomment the **CHRONOS BACKEND** section below it.
 
 No other files need to change.
-
----
-
-## Sample Output
-
-**Terminal chat — query and response**
-
-![Test Run - Query](./docs/outputs/1.PNG)
-![Test Run - Result](./docs/outputs/2.PNG)
-
-**Web UI **
-
-![UI - Auth Page](./docs/outputs/3.PNG)
-![Sample Chatting](./docs/outputs/chat_ans1.PNG)
-![Sample Chatting](./docs/outputs/chat_ans2.PNG)
-![Sample Chatting](./docs/outputs/chat_ans3.PNG)
-![Sample Chatting](./docs/outputs/chat_ans4.PNG)
 
 ---
 

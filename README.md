@@ -357,6 +357,7 @@ No other files need to change.
 **Web UI — authentication page**
 
 ![UI - Auth Page](./docs/outputs/3.PNG)
+![Test Chat](./docs/outputs/chat_ans.PNG)
 
 ---
 

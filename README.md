@@ -11,7 +11,6 @@
 
 **Web UI **
 
-![UI - Auth Page](./docs/outputs/3.PNG)
 ![Sample Chatting](./docs/outputs/chat_ans1.PNG)
 ![Sample Chatting](./docs/outputs/chat_ans2.PNG)
 ![Sample Chatting](./docs/outputs/chat_ans3.PNG)

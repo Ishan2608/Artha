@@ -354,9 +354,13 @@ No other files need to change.
 ![Test Run - Query](./docs/outputs/1.PNG)
 ![Test Run - Result](./docs/outputs/2.PNG)
 
-**Web UI — authentication page**
+**Web UI **
 
 ![UI - Auth Page](./docs/outputs/3.PNG)
+![Sample Chatting](./docs/outputs/chat_ans1.PNG)
+![Sample Chatting](./docs/outputs/chat_ans2.PNG)
+![Sample Chatting](./docs/outputs/chat_ans3.PNG)
+![Sample Chatting](./docs/outputs/chat_ans4.PNG)
 
 ---
 

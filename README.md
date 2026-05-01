@@ -103,10 +103,13 @@ User Message
 artha-backend/
 │
 ├── main.py                  # FastAPI app, route definitions, lifespan
-├── agent.py                 # LangGraph ReAct agent + tool registrations
+├── multi_agent.py           # Code that contains multi agent definition.
 ├── auth.py                  # JWT creation, password hashing, Depends guard
 ├── config.py                # Centralised settings via pydantic-settings
 ├── db.py                    # SQLAlchemy engine, SessionLocal, Base, init_db()
+├── REAMDE.md                
+├── .env                
+├── .env.example
 │
 ├── models/
 │   ├── db_models.py         # ORM: User, Message, UploadedFile
